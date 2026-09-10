@@ -2,225 +2,185 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Lista de Compras Plus & Orçamento Inteligente</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Lista de Compras Plus</title>
   
   <!-- PWA & Mobile Meta Tags -->
-  <meta name="description" content="Controle inteligente de compras com orçamento e dedução de saldo em tempo real.">
+  <meta name="description" content="Controle inteligente de compras com orçamento e saldo em tempo real.">
   <meta name="theme-color" content="#2563eb">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Compras Plus">
 
-  <!-- Links de Manifesto e Ícones -->
+  <!-- Manifest e Ícones -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-  <!-- Tipografia -->
+  <!-- Tipografia Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <!-- Estilos -->
+  <!-- CSS Mobile-First -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
-    <!-- Header Principal -->
-    <header class="app-header">
-      <div class="header-brand">
-        <span class="brand-icon">🛒</span>
-        <div>
-          <h1 class="brand-title">Lista de Compras Plus</h1>
-          <p class="brand-subtitle">Controle de orçamento e saldo em tempo real</p>
+  <div class="mobile-app-container">
+    
+    <!-- Header Superior Mobile -->
+    <header class="mobile-header">
+      <div class="brand-wrapper">
+        <span class="brand-logo-icon">🛒</span>
+        <div class="brand-text">
+          <h1>Compras Plus</h1>
+          <p>Orçamento & Saldo em Tempo Real</p>
         </div>
       </div>
       <div class="header-actions">
-        <!-- Botão de Instalação do PWA (ativado quando o navegador permitir) -->
-        <button id="btn-instalar-app" class="btn btn-install hidden" title="Instalar aplicativo no celular ou computador">
-          <span class="btn-icon">📲</span> Instalar App
+        <!-- Botão Instalar App (PWA) -->
+        <button id="btn-instalar-app" class="btn btn-install-badge hidden" title="Instalar aplicativo">
+          📲 Instalar
         </button>
-        <button id="btn-nova-lista" class="btn btn-primary">
-          <span class="btn-icon">+</span> Nova Lista
+        <!-- Botão de Configurações / Banco de Dados -->
+        <button id="btn-abrir-config" class="btn btn-outline btn-icon-only" title="Configurações do Banco de Dados">
+          ⚙️
         </button>
       </div>
     </header>
 
-    <!-- Banner Toast de Notificação de Instalação PWA -->
-    <div id="pwa-install-banner" class="pwa-banner hidden">
-      <div class="pwa-banner-content">
-        <span class="pwa-banner-icon">📱</span>
-        <div>
-          <strong>Instalar Lista de Compras</strong>
-          <p>Instale na tela inicial para usar como aplicativo e sem internet.</p>
-        </div>
-      </div>
-      <div class="pwa-banner-actions">
-        <button id="btn-pwa-dismiss" class="btn btn-sm btn-outline">Depois</button>
-        <button id="btn-pwa-confirm" class="btn btn-sm btn-success">Instalar Agora</button>
-      </div>
-    </div>
-
-    <!-- Tela 1: Visão Geral de Listas (Dashboard) -->
-    <main id="view-dashboard" class="view active">
-      <div class="section-title-bar">
-        <h2>Minhas Listas</h2>
-        <span id="total-listas-badge" class="badge">0 listas</span>
+    <!-- TELA 1: DASHBOARD DE LISTAS (VISÃO GERAL) -->
+    <main id="view-dashboard" class="view">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+        <h2 style="font-size: 1.15rem; font-weight: 700;">Minhas Listas</h2>
+        <span id="total-listas-badge" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">0 listas</span>
       </div>
 
-      <div id="listas-grid" class="listas-grid">
-        <!-- Cards de listas injetados via JavaScript -->
+      <!-- Lista de Cards das Listas -->
+      <div id="listas-container" class="listas-list-mobile">
+        <!-- Injetado dinamicamente do Banco de Dados -->
       </div>
 
-      <!-- Estado Vazio para quando não houver listas -->
-      <div id="empty-state-listas" class="empty-state hidden">
-        <div class="empty-icon">📝</div>
-        <h3>Nenhuma lista criada ainda</h3>
-        <p>Crie sua primeira lista de compras com orçamento para começar.</p>
-        <button id="btn-empty-criar-lista" class="btn btn-primary" style="margin-top: 1rem;">
-          + Criar Nova Lista
+      <!-- Estado Vazio (Sem Mocks) -->
+      <div id="empty-state-listas" class="empty-state-mobile hidden">
+        <div class="empty-state-icon">📋</div>
+        <h3>Nenhuma lista criada</h3>
+        <p>Crie sua primeira lista com teto de orçamento para acompanhar seus gastos no mercado.</p>
+        <button id="btn-criar-primeira-lista" class="btn btn-primary" style="margin-top: 1.25rem; width: 100%;">
+          + Criar Primeira Lista
         </button>
       </div>
     </main>
 
-    <!-- Tela 2: Detalhe da Lista Selecionada -->
+    <!-- TELA 2: DETALHE DA LISTA DE COMPRAS -->
     <main id="view-lista-detalhe" class="view hidden">
-      <!-- Navegação de Retorno -->
-      <div class="nav-voltar-bar">
-        <button id="btn-voltar-dashboard" class="btn btn-secondary">
-          ← Voltar para Minhas Listas
+      <!-- Barra Superior de Navegação -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+        <button id="btn-voltar-dashboard" class="btn btn-secondary btn-sm">
+          ← Voltar
         </button>
-        <div class="lista-detalhe-tags">
-          <span id="detalhe-categoria-lista" class="badge-tag">Supermercado</span>
-        </div>
+        <span id="detalhe-categoria-tag" class="budget-tag">🛒 Supermercado</span>
       </div>
 
-      <!-- Card do Painel Financeiro e Progresso -->
-      <section class="budget-panel">
-        <div class="budget-header">
-          <div>
-            <h2 id="detalhe-nome-lista" class="detalhe-titulo">Nome da Lista</h2>
-            <p class="text-muted" id="detalhe-subtitulo">Gerencie os itens e acompanhe o orçamento restante</p>
-          </div>
-          <button id="btn-editar-orcamento" class="btn btn-outline btn-sm" title="Alterar orçamento">
-            ✏️ Alterar Orçamento
+      <!-- Card do Painel Financeiro da Lista -->
+      <section class="mobile-budget-card">
+        <div class="budget-card-top">
+          <h2 id="detalhe-nome-lista" style="font-size: 1.2rem; font-weight: 700;">Nome da Lista</h2>
+          <button id="btn-editar-orcamento" class="btn btn-outline btn-sm" style="min-height: 32px; font-size: 0.75rem; padding: 0.25rem 0.6rem;">
+            ✏️ Orçamento
           </button>
         </div>
 
-        <!-- Indicadores de Valores -->
-        <div class="budget-metrics">
-          <div class="metric-card">
-            <span class="metric-label">Orçamento Total</span>
-            <span id="metric-orcamento" class="metric-value">R$ 0,00</span>
+        <!-- Grade de Métricas Financeiras -->
+        <div class="budget-values-grid">
+          <div class="budget-val-box">
+            <span class="budget-val-label">Orçamento</span>
+            <span id="metric-orcamento" class="budget-val-num">R$ 0,00</span>
+          </div>
+          <div class="budget-val-box">
+            <span class="budget-val-label">Total Gasto</span>
+            <span id="metric-gasto" class="budget-val-num" style="color: var(--primary);">R$ 0,00</span>
           </div>
 
-          <div class="metric-card">
-            <span class="metric-label">Total em Compras</span>
-            <span id="metric-gasto" class="metric-value text-gasto">R$ 0,00</span>
-          </div>
-
-          <div class="metric-card metric-destaque" id="card-saldo-disponivel">
-            <span class="metric-label">Saldo Disponível</span>
-            <span id="metric-saldo" class="metric-value text-saldo">R$ 0,00</span>
-            <span id="metric-saldo-status" class="metric-status">Dentro do limite</span>
+          <!-- Saldo Disponível em Destaque com Cores Semânticas -->
+          <div id="box-saldo-disponivel" class="budget-saldo-highlight saldo-positivo">
+            <div>
+              <span class="budget-val-label">Saldo Disponível</span>
+              <span id="metric-saldo-status" style="font-size: 0.725rem; font-weight: 600;">Dentro do limite</span>
+            </div>
+            <span id="metric-saldo" class="budget-val-num">R$ 0,00</span>
           </div>
         </div>
 
         <!-- Barra de Progresso do Orçamento -->
-        <div class="progress-section">
-          <div class="progress-labels">
-            <span>Consumo do Orçamento: <strong id="progress-percent-text">0%</strong></span>
-            <span id="progress-status-msg" class="progress-status-text">Seguro</span>
-          </div>
-          <div class="progress-bar-container">
-            <div id="budget-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
-          </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted);">
+          <span>Consumo: <strong id="progress-percent-text">0%</strong></span>
+          <span id="progress-status-msg" style="font-weight: 700;">Seguro</span>
+        </div>
+        <div class="progress-container">
+          <div id="budget-progress-fill" class="progress-fill prog-green" style="width: 0%;"></div>
         </div>
       </section>
 
-      <!-- Formulário de Adicionar Mercadoria -->
-      <section class="add-product-section">
-        <h3>Adicionar Mercadoria</h3>
-        <form id="form-novo-produto" class="product-form">
-          <div class="form-row-main">
-            <!-- Nome do Produto -->
-            <div class="form-group flex-2">
-              <label for="produto-nome">Nome da Mercadoria *</label>
-              <input type="text" id="produto-nome" placeholder="Ex: Arroz 5kg, Leite, Café..." required autocomplete="off">
-            </div>
-
-            <!-- Categoria da Mercadoria -->
-            <div class="form-group flex-1">
-              <label for="produto-categoria">Categoria do Produto *</label>
-              <select id="produto-categoria" required>
-                <option value="Mercearia">🌾 Mercearia</option>
-                <option value="Hortifrúti">🍎 Hortifrúti</option>
-                <option value="Carnes & Aves">🥩 Carnes & Aves</option>
-                <option value="Laticínios & Frios">🧀 Laticínios & Frios</option>
-                <option value="Bebidas">🧃 Bebidas</option>
-                <option value="Limpeza">🧹 Limpeza</option>
-                <option value="Higiene Pessoal">🧴 Higiene Pessoal</option>
-                <option value="Padaria">🍞 Padaria</option>
-                <option value="Congelados">🧊 Congelados</option>
-                <option value="Outros">📦 Outros</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row-calc">
-            <!-- Quantidade -->
-            <div class="form-group">
-              <label for="produto-quantidade">Quantidade *</label>
-              <div class="qty-stepper">
-                <button type="button" id="btn-qty-minus" class="btn-step">−</button>
-                <input type="number" id="produto-quantidade" min="0.01" step="any" value="1" required>
-                <button type="button" id="btn-qty-plus" class="btn-step">+</button>
-              </div>
-            </div>
-
-            <!-- Valor Unitário -->
-            <div class="form-group">
-              <label for="produto-valor-unitario">Valor Unitário (R$) *</label>
-              <div class="input-prefix-wrapper">
-                <span class="input-prefix">R$</span>
-                <input type="number" id="produto-valor-unitario" min="0" step="0.01" placeholder="0,00" required>
-              </div>
-            </div>
-
-            <!-- Subtotal Calculado Instantâneo -->
-            <div class="form-group subtotal-box">
-              <label>Subtotal do Item</label>
-              <div class="subtotal-display">
-                <span id="preview-subtotal">R$ 0,00</span>
-              </div>
-            </div>
-
-            <!-- Botão Adicionar -->
-            <div class="form-group btn-adicionar-col">
-              <label>&nbsp;</label>
-              <button type="submit" id="btn-adicionar-produto" class="btn btn-success">
-                + Adicionar Item
-              </button>
-            </div>
-          </div>
-        </form>
+      <!-- Carrossel Deslizável de Categorias de Mercadorias -->
+      <section style="margin-bottom: 0.65rem;">
+        <div id="chips-categorias" class="category-chips-carousel">
+          <button class="chip-btn active" data-cat="TODAS">Todas</button>
+          <button class="chip-btn" data-cat="Mercearia">🌾 Mercearia</button>
+          <button class="chip-btn" data-cat="Hortifrúti">🍎 Hortifrúti</button>
+          <button class="chip-btn" data-cat="Carnes & Aves">🥩 Carnes</button>
+          <button class="chip-btn" data-cat="Laticínios & Frios">🧀 Laticínios</button>
+          <button class="chip-btn" data-cat="Bebidas">🧃 Bebidas</button>
+          <button class="chip-btn" data-cat="Limpeza">🧹 Limpeza</button>
+          <button class="chip-btn" data-cat="Higiene Pessoal">🧴 Higiene</button>
+          <button class="chip-btn" data-cat="Padaria">🍞 Padaria</button>
+          <button class="chip-btn" data-cat="Congelados">🧊 Congelados</button>
+          <button class="chip-btn" data-cat="Outros">📦 Outros</button>
+        </div>
       </section>
 
-      <!-- Lista de Mercadorias Cadastradas -->
-      <section class="products-list-section">
-        <div class="products-header">
-          <div class="products-title-group">
-            <h3>Itens da Lista</h3>
-            <span id="itens-contador" class="badge">0 itens</span>
+      <!-- Lista de Cards de Mercadorias -->
+      <section>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+          <h3 style="font-size: 1rem; font-weight: 700;">Mercadorias</h3>
+          <span id="itens-contador" style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600;">0 itens</span>
+        </div>
+
+        <div id="produtos-mobile-container" class="product-items-container">
+          <!-- Cards de produtos injetados do IndexedDB -->
+        </div>
+
+        <!-- Estado Vazio da Lista de Produtos -->
+        <div id="empty-state-produtos" class="empty-state-mobile hidden" style="padding: 2.5rem 1rem;">
+          <div class="empty-state-icon">🛒</div>
+          <p>Nenhum produto nesta lista ainda.</p>
+          <small style="color: var(--text-muted);">Toque no botão <strong>+</strong> abaixo para adicionar uma mercadoria.</small>
+        </div>
+      </section>
+    </main>
+
+    <!-- FLOATING ACTION BUTTON (FAB) - NOVO ITEM OU NOVA LISTA -->
+    <button id="fab-action-btn" class="fab-btn" title="Adicionar">+</button>
+
+    <!-- BOTTOM SHEET: ADICIONAR MERCADORIA (OTIMIZADO PARA POLEGAR) -->
+    <div id="sheet-novo-produto" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>Adicionar Mercadoria</h3>
+          <button id="btn-fechar-sheet-produto" class="btn btn-outline btn-sm" style="min-height: 36px;">✕</button>
+        </div>
+
+        <form id="form-novo-produto">
+          <div class="form-group-mobile">
+            <label for="produto-nome">Nome da Mercadoria *</label>
+            <input type="text" id="produto-nome" placeholder="Ex: Arroz 5kg, Feijão, Leite..." required autocomplete="off">
           </div>
 
-          <!-- Filtro rápido por categoria -->
-          <div class="filter-group">
-            <label for="filtro-categoria-item" class="sr-only">Filtrar por Categoria</label>
-            <select id="filtro-categoria-item" class="select-sm">
-              <option value="TODAS">Todas as Categorias</option>
+          <div class="form-group-mobile">
+            <label for="produto-categoria">Categoria *</label>
+            <select id="produto-categoria" required>
               <option value="Mercearia">🌾 Mercearia</option>
               <option value="Hortifrúti">🍎 Hortifrúti</option>
               <option value="Carnes & Aves">🥩 Carnes & Aves</option>
@@ -233,50 +193,54 @@
               <option value="Outros">📦 Outros</option>
             </select>
           </div>
-        </div>
 
-        <!-- Tabela responsiva de Itens -->
-        <div class="table-container">
-          <table class="products-table">
-            <thead>
-              <tr>
-                <th width="40">Status</th>
-                <th>Mercadoria</th>
-                <th>Categoria</th>
-                <th>Qtd</th>
-                <th>Valor Unit.</th>
-                <th>Subtotal</th>
-                <th width="60">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="produtos-table-body">
-              <!-- Itens injetados pelo JS -->
-            </tbody>
-          </table>
-        </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <!-- Quantidade com Stepper Grande -->
+            <div class="form-group-mobile">
+              <label for="produto-quantidade">Quantidade</label>
+              <div class="mobile-stepper-row">
+                <button type="button" id="btn-qty-minus" class="mobile-step-btn">−</button>
+                <input type="number" id="produto-quantidade" min="0.01" step="any" value="1" required>
+                <button type="button" id="btn-qty-plus" class="mobile-step-btn">+</button>
+              </div>
+            </div>
 
-        <div id="empty-state-produtos" class="empty-state hidden">
-          <div class="empty-icon">🛒</div>
-          <p>Nenhum produto cadastrado nesta lista ainda.</p>
-          <small>Use o formulário acima para adicionar itens e acompanhar o saldo disponível.</small>
-        </div>
-      </section>
-    </main>
-
-    <!-- Modal: Criar Nova Lista -->
-    <div id="modal-nova-lista" class="modal-backdrop hidden">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h3>Criar Nova Lista de Compras</h3>
-          <button id="btn-fechar-modal" class="btn-close">&times;</button>
-        </div>
-        <form id="form-nova-lista">
-          <div class="form-group">
-            <label for="nova-lista-nome">Nome da Lista *</label>
-            <input type="text" id="nova-lista-nome" placeholder="Ex: Compras do Mês, Feira de Sábado..." required>
+            <!-- Preço Unitário -->
+            <div class="form-group-mobile">
+              <label for="produto-valor-unitario">Valor Unit. (R$)</label>
+              <input type="number" id="produto-valor-unitario" min="0" step="0.01" placeholder="0,00" required>
+            </div>
           </div>
 
-          <div class="form-group">
+          <!-- Prévia do Subtotal do Item -->
+          <div class="live-preview-box">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Subtotal do Item:</span>
+            <strong id="preview-subtotal">R$ 0,00</strong>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            + Adicionar à Lista
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- BOTTOM SHEET: NOVA LISTA -->
+    <div id="sheet-nova-lista" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>Nova Lista de Compras</h3>
+          <button id="btn-fechar-sheet-lista" class="btn btn-outline btn-sm" style="min-height: 36px;">✕</button>
+        </div>
+
+        <form id="form-nova-lista">
+          <div class="form-group-mobile">
+            <label for="nova-lista-nome">Nome da Lista *</label>
+            <input type="text" id="nova-lista-nome" placeholder="Ex: Compras do Mês, Churrasco..." required autocomplete="off">
+          </div>
+
+          <div class="form-group-mobile">
             <label for="nova-lista-categoria">Categoria da Lista *</label>
             <select id="nova-lista-categoria" required>
               <option value="Supermercado">🛒 Supermercado Geral</option>
@@ -291,48 +255,71 @@
             </select>
           </div>
 
-          <div class="form-group">
+          <div class="form-group-mobile">
             <label for="nova-lista-orcamento">Orçamento Estipulado (R$) *</label>
-            <div class="input-prefix-wrapper">
-              <span class="input-prefix">R$</span>
-              <input type="number" id="nova-lista-orcamento" min="0" step="0.01" placeholder="Ex: 350,00" required>
-            </div>
-            <small class="text-muted">Valor máximo planejado para esta compra.</small>
+            <input type="number" id="nova-lista-orcamento" min="0" step="0.01" placeholder="Ex: 300,00" required>
+            <small style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Teto máximo planejado para esta lista.</small>
           </div>
 
-          <div class="modal-actions">
-            <button type="button" id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Salvar Lista</button>
-          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+            Criar Lista
+          </button>
         </form>
       </div>
     </div>
 
-    <!-- Modal: Editar Orçamento -->
-    <div id="modal-editar-orcamento" class="modal-backdrop hidden">
-      <div class="modal-card modal-sm">
-        <div class="modal-header">
-          <h3>Atualizar Orçamento</h3>
-          <button id="btn-fechar-modal-orcamento" class="btn-close">&times;</button>
+    <!-- MODAL: EDITAR ORÇAMENTO -->
+    <div id="modal-editar-orcamento" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>Alterar Orçamento</h3>
+          <button id="btn-fechar-modal-orcamento" class="btn btn-outline btn-sm">✕</button>
         </div>
         <form id="form-editar-orcamento">
-          <div class="form-group">
-            <label for="novo-orcamento-input">Novo Orçamento da Lista (R$) *</label>
-            <div class="input-prefix-wrapper">
-              <span class="input-prefix">R$</span>
-              <input type="number" id="novo-orcamento-input" min="0" step="0.01" required>
-            </div>
+          <div class="form-group-mobile">
+            <label for="novo-orcamento-input">Novo Orçamento (R$)</label>
+            <input type="number" id="novo-orcamento-input" min="0" step="0.01" required>
           </div>
-          <div class="modal-actions">
-            <button type="button" id="btn-cancelar-modal-orcamento" class="btn btn-secondary">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Salvar</button>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Salvar Novo Orçamento
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL: CONFIGURAÇÕES DE BANCO DE DADOS (SUPABASE CLOUD OPCIONAL) -->
+    <div id="modal-config-db" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>Banco de Dados & Nuvem</h3>
+          <button id="btn-fechar-modal-db" class="btn btn-outline btn-sm">✕</button>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          <p>Seus dados estão gravados de forma permanente no <strong>IndexedDB (Banco Local Seguro e Offline)</strong>.</p>
+          <p style="margin-top: 0.5rem;">Deseja sincronizar com o <strong>Supabase Cloud</strong> para acessar em múltiplos aparelhos? Insira sua URL e Anon Key abaixo:</p>
+        </div>
+        <form id="form-config-supabase">
+          <div class="form-group-mobile">
+            <label for="supabase-url">Supabase Project URL (Opcional)</label>
+            <input type="text" id="supabase-url" placeholder="https://seu-projeto.supabase.co">
           </div>
+          <div class="form-group-mobile">
+            <label for="supabase-key">Supabase Anon Key (Opcional)</label>
+            <input type="text" id="supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Salvar Configurações
+          </button>
         </form>
       </div>
     </div>
 
   </div>
 
+  <!-- Scripts: Banco de Dados primeiro, depois a Lógica do App -->
+  <script src="db.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

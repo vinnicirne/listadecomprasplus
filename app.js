@@ -1,13 +1,10 @@
 /**
- * Lista de Compras Plus & Orçamento Inteligente
- * Lógica da Aplicação com persistência em LocalStorage e suporte a PWA (Offline & Instalação)
+ * app.js - Lógica da Aplicação Mobile-First & Banco de Dados Real
+ * Totalmente reativo, sem dados mockados e com suporte completo a IndexedDB e PWA.
  */
 
-const STORAGE_KEY = 'lista_compras_dados_v1';
-
-// Categorias e seus respectivos ícones
+// Ícones por categoria
 const CATEGORY_ICONS = {
-  // Categorias de Mercadorias
   'Mercearia': '🌾',
   'Hortifrúti': '🍎',
   'Carnes & Aves': '🥩',
@@ -18,8 +15,6 @@ const CATEGORY_ICONS = {
   'Padaria': '🍞',
   'Congelados': '🧊',
   'Outros': '📦',
-  
-  // Categorias de Listas
   'Supermercado': '🛒',
   'Feira & Hortifrúti': '🥬',
   'Açougue & Carnes': '🥩',
@@ -30,84 +25,6 @@ const CATEGORY_ICONS = {
   'Churrasco & Eventos': '🔥'
 };
 
-// Dados padrão iniciais (demonstração prática na primeira utilização)
-const INITIAL_DEMO_DATA = [
-  {
-    id: 'demo-lista-1',
-    name: 'Supermercado da Semana',
-    category: 'Supermercado',
-    budget: 350.00,
-    createdAt: new Date().toISOString(),
-    items: [
-      {
-        id: 'item-1',
-        name: 'Arroz Tipo 1 (5kg)',
-        category: 'Mercearia',
-        quantity: 2,
-        unitPrice: 28.90,
-        checked: true
-      },
-      {
-        id: 'item-2',
-        name: 'Feijão Carioca (1kg)',
-        category: 'Mercearia',
-        quantity: 3,
-        unitPrice: 7.50,
-        checked: true
-      },
-      {
-        id: 'item-3',
-        name: 'Peito de Frango Resfriado (kg)',
-        category: 'Carnes & Aves',
-        quantity: 2.5,
-        unitPrice: 21.90,
-        checked: false
-      },
-      {
-        id: 'item-4',
-        name: 'Maçã Gala (kg)',
-        category: 'Hortifrúti',
-        quantity: 1.5,
-        unitPrice: 9.80,
-        checked: false
-      },
-      {
-        id: 'item-5',
-        name: 'Detergente Líquido (500ml)',
-        category: 'Limpeza',
-        quantity: 4,
-        unitPrice: 2.79,
-        checked: false
-      }
-    ]
-  },
-  {
-    id: 'demo-lista-2',
-    name: 'Churrasco com Amigos',
-    category: 'Churrasco & Eventos',
-    budget: 200.00,
-    createdAt: new Date().toISOString(),
-    items: [
-      {
-        id: 'item-c1',
-        name: 'Picanha Bovina (kg)',
-        category: 'Carnes & Aves',
-        quantity: 1.5,
-        unitPrice: 69.90,
-        checked: false
-      },
-      {
-        id: 'item-c2',
-        name: 'Carvão Vegetal (5kg)',
-        category: 'Outros',
-        quantity: 1,
-        unitPrice: 24.50,
-        checked: true
-      }
-    ]
-  }
-];
-
 // Estado da Aplicação
 let state = {
   lists: [],
@@ -115,24 +32,23 @@ let state = {
   filterCategory: 'TODAS'
 };
 
-// Variável para armazenar o prompt de instalação PWA
 let deferredInstallPrompt = null;
 
 // ==========================================================
 // Funções Utilitárias & Formatação
 // ==========================================================
 
-function formatCurrency(value) {
-  const num = Number(value) || 0;
+function formatCurrency(val) {
+  const num = Number(val) || 0;
   return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function getIcon(category) {
-  return CATEGORY_ICONS[category] || '🏷️';
+function getIcon(cat) {
+  return CATEGORY_ICONS[cat] || '🏷️';
 }
 
 function generateId() {
-  return 'id_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+  return 'item_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
 }
 
 function vibrateDevice(ms = 15) {
@@ -141,34 +57,14 @@ function vibrateDevice(ms = 15) {
   }
 }
 
-// ==========================================================
-// Persistência em LocalStorage
-// ==========================================================
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        state.lists = parsed;
-        return;
-      }
-    }
-  } catch (err) {
-    console.warn('Erro ao ler localStorage, utilizando dados padrão:', err);
-  }
-  // Se não existir, carrega listas de demonstração
-  state.lists = JSON.parse(JSON.stringify(INITIAL_DEMO_DATA));
-  saveState();
-}
-
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.lists));
-  } catch (err) {
-    console.error('Falha ao salvar no localStorage:', err);
-  }
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // ==========================================================
@@ -178,7 +74,7 @@ function saveState() {
 function calculateListTotals(list) {
   const items = list.items || [];
   
-  // Total Gasto = Soma de (Qtd * Valor Unitário) de todos os itens
+  // Total Gasto = Soma de (Qtd * Valor Unitário)
   const totalGasto = items.reduce((sum, item) => {
     const qtd = Number(item.quantity) || 0;
     const preco = Number(item.unitPrice) || 0;
@@ -186,13 +82,9 @@ function calculateListTotals(list) {
   }, 0);
 
   const orcamento = Number(list.budget) || 0;
-  
-  // Saldo Disponível = Orçamento - Total Gasto
   const saldoDisponivel = orcamento - totalGasto;
-  
-  // Percentual consumido do orçamento
   const percentualConsumido = orcamento > 0 ? (totalGasto / orcamento) * 100 : 0;
-  
+
   return {
     orcamento,
     totalGasto,
@@ -202,14 +94,29 @@ function calculateListTotals(list) {
 }
 
 // ==========================================================
-// Renderização: Visão Geral (Dashboard de Listas)
+// Inicialização de Dados do Banco (IndexedDB)
+// ==========================================================
+
+async function loadDataFromDb() {
+  try {
+    state.lists = await db.getLists();
+    renderDashboard();
+  } catch (err) {
+    console.error('Erro ao carregar dados do banco:', err);
+    state.lists = [];
+    renderDashboard();
+  }
+}
+
+// ==========================================================
+// Renderização: Dashboard (Minhas Listas)
 // ==========================================================
 
 function renderDashboard() {
-  const container = document.getElementById('listas-grid');
+  const container = document.getElementById('listas-container');
   const emptyState = document.getElementById('empty-state-listas');
   const badgeTotal = document.getElementById('total-listas-badge');
-  
+
   badgeTotal.textContent = `${state.lists.length} ${state.lists.length === 1 ? 'lista' : 'listas'}`;
 
   if (state.lists.length === 0) {
@@ -223,65 +130,50 @@ function renderDashboard() {
   container.innerHTML = state.lists.map(list => {
     const { orcamento, totalGasto, saldoDisponivel, percentualConsumido } = calculateListTotals(list);
     
-    // Cor e status do progresso
-    let progressClass = 'progress-green';
     let saldoColor = 'var(--success-text)';
+    let progClass = 'prog-green';
     let saldoStatus = 'Disponível';
 
     if (saldoDisponivel < 0) {
-      progressClass = 'progress-red';
       saldoColor = 'var(--danger-text)';
-      saldoStatus = 'Limite Excedido';
+      progClass = 'prog-red';
+      saldoStatus = 'Excedido';
     } else if (percentualConsumido >= 75) {
-      progressClass = 'progress-yellow';
       saldoColor = 'var(--warning-text)';
-      saldoStatus = 'Atenção ao Limite';
+      progClass = 'prog-yellow';
+      saldoStatus = 'Atenção';
     }
 
     const progressWidth = Math.min(100, Math.round(percentualConsumido));
     const icon = getIcon(list.category);
+    const qtdItens = (list.items || []).length;
 
     return `
-      <div class="lista-card" data-id="${list.id}">
-        <div class="lista-card-header">
+      <div class="card-lista-item" onclick="openList('${list.id}')">
+        <div class="card-lista-header">
           <div>
-            <h3 class="lista-card-title">${escapeHtml(list.name)}</h3>
-            <span class="badge-tag">${icon} ${escapeHtml(list.category)}</span>
+            <h3 class="card-lista-title">${escapeHtml(list.name)}</h3>
+            <span class="budget-tag" style="margin-top: 0.25rem;">${icon} ${escapeHtml(list.category)}</span>
           </div>
-          <button class="btn-delete" title="Excluir Lista" onclick="handleDeleteList('${list.id}', event)">
+          <button class="btn-trash" title="Excluir Lista" onclick="handleDeleteList('${list.id}', event)">
             🗑️
           </button>
         </div>
 
-        <div class="lista-card-metrics">
-          <div class="card-metric-col">
-            <span class="card-metric-label">Orçamento</span>
-            <span class="card-metric-val">${formatCurrency(orcamento)}</span>
-          </div>
-          <div class="card-metric-col">
-            <span class="card-metric-label">Gasto</span>
-            <span class="card-metric-val text-gasto">${formatCurrency(totalGasto)}</span>
-          </div>
-          <div class="card-metric-col card-saldo-destaque">
-            <span class="card-metric-label">Saldo Disponível (${saldoStatus})</span>
-            <span class="card-metric-val" style="color: ${saldoColor}">${formatCurrency(saldoDisponivel)}</span>
-          </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-top: 0.5rem;">
+          <span>Orçamento: <strong>${formatCurrency(orcamento)}</strong></span>
+          <span>Gasto: <strong style="color: var(--primary);">${formatCurrency(totalGasto)}</strong></span>
         </div>
 
-        <div class="lista-card-progress">
-          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
-            <span>Consumo: <strong>${Math.round(percentualConsumido)}%</strong></span>
-            <span>${list.items.length} ${list.items.length === 1 ? 'item' : 'itens'}</span>
-          </div>
-          <div class="card-progress-bar">
-            <div class="card-progress-fill ${progressClass}" style="width: ${progressWidth}%;"></div>
-          </div>
+        <div class="progress-container" style="margin: 0.5rem 0;">
+          <div class="progress-fill ${progClass}" style="width: ${progressWidth}%;"></div>
         </div>
 
-        <div class="lista-card-actions">
-          <button class="btn btn-primary btn-sm" onclick="openList('${list.id}')" style="width: 100%;">
-            Abrir Lista & Itens →
-          </button>
+        <div class="card-lista-footer">
+          <span>${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'} (${Math.round(percentualConsumido)}%)</span>
+          <span style="font-weight: 700; color: ${saldoColor}">
+            Saldo: ${formatCurrency(saldoDisponivel)} (${saldoStatus})
+          </span>
         </div>
       </div>
     `;
@@ -289,10 +181,10 @@ function renderDashboard() {
 }
 
 // ==========================================================
-// Renderização: Detalhe da Lista Selecionada
+// Renderização: Detalhe da Lista (Itens & Orçamento)
 // ==========================================================
 
-function renderListDetail(listId) {
+async function renderListDetail(listId) {
   const list = state.lists.find(l => l.id === listId);
   if (!list) {
     showDashboard();
@@ -303,73 +195,62 @@ function renderListDetail(listId) {
 
   // Atualizar cabeçalho da lista
   document.getElementById('detalhe-nome-lista').textContent = list.name;
-  document.getElementById('detalhe-categoria-lista').textContent = `${getIcon(list.category)} ${list.category}`;
+  document.getElementById('detalhe-categoria-tag').textContent = `${getIcon(list.category)} ${list.category}`;
 
-  // Calcular totais e atualizar métricas financeiras
+  // Calcular métricas
   const { orcamento, totalGasto, saldoDisponivel, percentualConsumido } = calculateListTotals(list);
 
   document.getElementById('metric-orcamento').textContent = formatCurrency(orcamento);
   document.getElementById('metric-gasto').textContent = formatCurrency(totalGasto);
-  
-  const metricSaldo = document.getElementById('metric-saldo');
-  const cardSaldo = document.getElementById('card-saldo-disponivel');
+  document.getElementById('metric-saldo').textContent = formatCurrency(saldoDisponivel);
+  document.getElementById('progress-percent-text').textContent = `${Math.round(percentualConsumido)}%`;
+
+  const boxSaldo = document.getElementById('box-saldo-disponivel');
   const statusSaldo = document.getElementById('metric-saldo-status');
   const progressFill = document.getElementById('budget-progress-fill');
-  const progressText = document.getElementById('progress-percent-text');
   const progressMsg = document.getElementById('progress-status-msg');
 
-  metricSaldo.textContent = formatCurrency(saldoDisponivel);
-  progressText.textContent = `${Math.round(percentualConsumido)}%`;
+  boxSaldo.classList.remove('saldo-positivo', 'saldo-alerta', 'saldo-negativo');
+  progressFill.classList.remove('prog-green', 'prog-yellow', 'prog-red');
 
-  // Remover classes anteriores
-  cardSaldo.classList.remove('saldo-positivo', 'saldo-alerta', 'saldo-negativo');
-  progressFill.classList.remove('progress-green', 'progress-yellow', 'progress-red');
-
-  // Ajustar barra de progresso visual (máximo 100% de preenchimento na barra)
   progressFill.style.width = `${Math.min(100, Math.max(0, percentualConsumido))}%`;
 
   if (saldoDisponivel < 0) {
-    // Orçamento estourado
-    cardSaldo.classList.add('saldo-negativo');
-    progressFill.classList.add('progress-red');
-    statusSaldo.textContent = `Orçamento ultrapassado em ${formatCurrency(Math.abs(saldoDisponivel))}`;
-    progressMsg.textContent = 'Limite Excedido!';
+    boxSaldo.classList.add('saldo-negativo');
+    progressFill.classList.add('prog-red');
+    statusSaldo.textContent = `Excedido em ${formatCurrency(Math.abs(saldoDisponivel))}`;
+    progressMsg.textContent = 'Orçamento Estourado!';
     progressMsg.style.color = 'var(--danger)';
   } else if (percentualConsumido >= 75) {
-    // Perto do limite
-    cardSaldo.classList.add('saldo-alerta');
-    progressFill.classList.add('progress-yellow');
+    boxSaldo.classList.add('saldo-alerta');
+    progressFill.classList.add('prog-yellow');
     statusSaldo.textContent = `Restam apenas ${formatCurrency(saldoDisponivel)}`;
     progressMsg.textContent = 'Atenção ao Limite';
     progressMsg.style.color = 'var(--warning-text)';
   } else {
-    // Confortável
-    cardSaldo.classList.add('saldo-positivo');
-    progressFill.classList.add('progress-green');
-    statusSaldo.textContent = `Saldo livre: ${formatCurrency(saldoDisponivel)}`;
-    progressMsg.textContent = 'Dentro do planejado';
+    boxSaldo.classList.add('saldo-positivo');
+    progressFill.classList.add('prog-green');
+    statusSaldo.textContent = `Restante livre: ${formatCurrency(saldoDisponivel)}`;
+    progressMsg.textContent = 'Seguro';
     progressMsg.style.color = 'var(--success)';
   }
 
-  // Renderizar tabela de itens
-  renderItemsTable(list);
+  // Renderizar produtos
+  renderProductCards(list);
 
-  // Alternar telas
+  // Trocar telas
   document.getElementById('view-dashboard').classList.add('hidden');
   document.getElementById('view-lista-detalhe').classList.remove('hidden');
-
-  // Resetar formulário de produto
-  resetProductForm();
 }
 
-function renderItemsTable(list) {
-  const tbody = document.getElementById('produtos-table-body');
+function renderProductCards(list) {
+  const container = document.getElementById('produtos-mobile-container');
   const emptyState = document.getElementById('empty-state-produtos');
   const badgeContador = document.getElementById('itens-contador');
-  
+
   let items = list.items || [];
 
-  // Filtrar por categoria se aplicável
+  // Filtrar por categoria se houver filtro selecionado
   if (state.filterCategory && state.filterCategory !== 'TODAS') {
     items = items.filter(it => it.category === state.filterCategory);
   }
@@ -377,66 +258,59 @@ function renderItemsTable(list) {
   badgeContador.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
 
   if (items.length === 0) {
-    tbody.innerHTML = '';
+    container.innerHTML = '';
     emptyState.classList.remove('hidden');
     return;
   }
 
   emptyState.classList.add('hidden');
 
-  tbody.innerHTML = items.map(item => {
+  container.innerHTML = items.map(item => {
     const qtd = Number(item.quantity) || 0;
     const preco = Number(item.unitPrice) || 0;
     const subtotal = qtd * preco;
     const catIcon = getIcon(item.category);
 
     return `
-      <tr class="${item.checked ? 'item-comprado' : ''}" data-item-id="${item.id}">
-        <td>
+      <div class="mobile-product-card ${item.checked ? 'item-comprado' : ''}">
+        <div class="product-left-col">
           <input 
             type="checkbox" 
-            class="item-checkbox" 
+            class="mobile-checkbox" 
             ${item.checked ? 'checked' : ''} 
             onchange="handleToggleItem('${list.id}', '${item.id}', this.checked)"
             title="Marcar como comprado"
           >
-        </td>
-        <td>
-          <span class="item-nome">${escapeHtml(item.name)}</span>
-        </td>
-        <td>
-          <span class="badge-tag">${catIcon} ${escapeHtml(item.category)}</span>
-        </td>
-        <td>
-          <strong>${qtd}</strong>
-        </td>
-        <td>
-          ${formatCurrency(preco)}
-        </td>
-        <td>
-          <span class="item-subtotal">${formatCurrency(subtotal)}</span>
-        </td>
-        <td>
-          <button 
-            class="btn-delete" 
-            title="Remover produto" 
-            onclick="handleDeleteItem('${list.id}', '${item.id}')"
-          >
-            🗑️
+          <div class="product-info-group">
+            <span class="product-name">${escapeHtml(item.name)}</span>
+            <div class="product-meta-sub">
+              <span>${catIcon} ${escapeHtml(item.category)}</span>
+              <span>•</span>
+              <span>${qtd} × ${formatCurrency(preco)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="product-right-col">
+          <span class="product-subtotal-val">${formatCurrency(subtotal)}</span>
+          <button class="btn-trash" title="Excluir item" onclick="handleDeleteItem('${list.id}', '${item.id}')">
+            ✕
           </button>
-        </td>
-      </tr>
+        </div>
+      </div>
     `;
   }).join('');
 }
 
 // ==========================================================
-// Manipulação de Eventos & Ações
+// Ações de Navegação e Interação
 // ==========================================================
 
 function openList(listId) {
   state.filterCategory = 'TODAS';
-  document.getElementById('filtro-categoria-item').value = 'TODAS';
+  document.querySelectorAll('#chips-categorias .chip-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.cat === 'TODAS');
+  });
   renderListDetail(listId);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -448,129 +322,73 @@ function showDashboard() {
   renderDashboard();
 }
 
-function handleDeleteList(listId, event) {
+async function handleDeleteList(listId, event) {
   if (event) event.stopPropagation();
   const list = state.lists.find(l => l.id === listId);
   if (!list) return;
 
   if (confirm(`Deseja realmente excluir a lista "${list.name}"?`)) {
-    vibrateDevice(30);
+    vibrateDevice(35);
+    await db.deleteList(listId);
     state.lists = state.lists.filter(l => l.id !== listId);
-    saveState();
     renderDashboard();
   }
 }
 
-function handleToggleItem(listId, itemId, isChecked) {
-  const list = state.lists.find(l => l.id === listId);
-  if (!list) return;
-
-  const item = list.items.find(i => i.id === itemId);
-  if (item) {
-    vibrateDevice(15);
-    item.checked = isChecked;
-    saveState();
+async function handleToggleItem(listId, itemId, checked) {
+  vibrateDevice(15);
+  const updatedList = await db.toggleItem(listId, itemId, checked);
+  if (updatedList) {
+    const idx = state.lists.findIndex(l => l.id === listId);
+    if (idx !== -1) state.lists[idx] = updatedList;
     renderListDetail(listId);
   }
 }
 
-function handleDeleteItem(listId, itemId) {
-  const list = state.lists.find(l => l.id === listId);
-  if (!list) return;
-
-  vibrateDevice(20);
-  list.items = list.items.filter(i => i.id !== itemId);
-  saveState();
-  renderListDetail(listId);
-}
-
-// ==========================================================
-// Formulário: Adicionar Novo Produto
-// ==========================================================
-
-function updateSubtotalPreview() {
-  const qtdInput = document.getElementById('produto-quantidade');
-  const unitInput = document.getElementById('produto-valor-unitario');
-  const preview = document.getElementById('preview-subtotal');
-
-  const qtd = parseFloat(qtdInput.value) || 0;
-  const unit = parseFloat(unitInput.value) || 0;
-  const subtotal = qtd * unit;
-
-  preview.textContent = formatCurrency(subtotal);
-}
-
-function resetProductForm() {
-  const form = document.getElementById('form-novo-produto');
-  form.reset();
-  document.getElementById('produto-quantidade').value = '1';
-  updateSubtotalPreview();
-  document.getElementById('produto-nome').focus();
-}
-
-function handleAddProduct(e) {
-  e.preventDefault();
-  if (!state.activeListId) return;
-
-  const list = state.lists.find(l => l.id === state.activeListId);
-  if (!list) return;
-
-  const nomeInput = document.getElementById('produto-nome');
-  const catInput = document.getElementById('produto-categoria');
-  const qtdInput = document.getElementById('produto-quantidade');
-  const precoInput = document.getElementById('produto-valor-unitario');
-
-  const name = nomeInput.value.trim();
-  const category = catInput.value;
-  const quantity = parseFloat(qtdInput.value) || 1;
-  const unitPrice = parseFloat(precoInput.value) || 0;
-
-  if (!name) {
-    alert('Por favor, informe o nome da mercadoria.');
-    nomeInput.focus();
-    return;
-  }
-
-  const newItem = {
-    id: generateId(),
-    name,
-    category,
-    quantity,
-    unitPrice,
-    checked: false
-  };
-
+async function handleDeleteItem(listId, itemId) {
   vibrateDevice(25);
-  list.items.push(newItem);
-  saveState();
-  
-  // Re-renderizar tela detalhada com recálculo instantâneo do saldo
-  renderListDetail(state.activeListId);
+  const updatedList = await db.deleteItem(listId, itemId);
+  if (updatedList) {
+    const idx = state.lists.findIndex(l => l.id === listId);
+    if (idx !== -1) state.lists[idx] = updatedList;
+    renderListDetail(listId);
+  }
 }
 
 // ==========================================================
-// Modais: Criar Lista & Alterar Orçamento
+// Bottom Sheets (Modais Deslizantes do Celular)
 // ==========================================================
 
-function openModalNovaLista() {
-  const modal = document.getElementById('modal-nova-lista');
-  document.getElementById('form-nova-lista').reset();
-  modal.classList.remove('hidden');
-  document.getElementById('nova-lista-nome').focus();
+function openSheet(id) {
+  const sheet = document.getElementById(id);
+  if (sheet) {
+    sheet.classList.remove('hidden');
+  }
 }
 
-function closeModalNovaLista() {
-  document.getElementById('modal-nova-lista').classList.add('hidden');
+function closeSheet(id) {
+  const sheet = document.getElementById(id);
+  if (sheet) {
+    sheet.classList.add('hidden');
+  }
 }
 
-function handleCreateList(e) {
+function closeAllSheets() {
+  document.querySelectorAll('.bottom-sheet-backdrop').forEach(s => s.classList.add('hidden'));
+}
+
+// ==========================================================
+// Formulários: Nova Lista & Novo Produto
+// ==========================================================
+
+async function handleCreateList(e) {
   e.preventDefault();
   const nome = document.getElementById('nova-lista-nome').value.trim();
   const categoria = document.getElementById('nova-lista-categoria').value;
   const orcamento = parseFloat(document.getElementById('nova-lista-orcamento').value) || 0;
 
   if (!nome) {
-    alert('Por favor, dê um nome para sua lista.');
+    alert('Informe o nome da lista.');
     return;
   }
 
@@ -584,203 +402,261 @@ function handleCreateList(e) {
   };
 
   vibrateDevice(25);
+  await db.saveList(newList);
   state.lists.unshift(newList);
-  saveState();
-  closeModalNovaLista();
   
-  // Abre diretamente a nova lista criada para o usuário já começar a cadastrar os itens
+  closeSheet('sheet-nova-lista');
+  document.getElementById('form-nova-lista').reset();
+  
+  // Abre a lista criada
   openList(newList.id);
 }
 
-function openModalEditarOrcamento() {
-  if (!state.activeListId) return;
-  const list = state.lists.find(l => l.id === state.activeListId);
-  if (!list) return;
+function updateSubtotalPreview() {
+  const qtdInput = document.getElementById('produto-quantidade');
+  const unitInput = document.getElementById('produto-valor-unitario');
+  const preview = document.getElementById('preview-subtotal');
 
-  const modal = document.getElementById('modal-editar-orcamento');
-  document.getElementById('novo-orcamento-input').value = list.budget;
-  modal.classList.remove('hidden');
-  document.getElementById('novo-orcamento-input').focus();
+  const qtd = parseFloat(qtdInput.value) || 0;
+  const unit = parseFloat(unitInput.value) || 0;
+  const subtotal = qtd * unit;
+
+  preview.textContent = formatCurrency(subtotal);
 }
 
-function closeModalEditarOrcamento() {
-  document.getElementById('modal-editar-orcamento').classList.add('hidden');
-}
-
-function handleUpdateBudget(e) {
+async function handleAddProduct(e) {
   e.preventDefault();
   if (!state.activeListId) return;
 
-  const list = state.lists.find(l => l.id === state.activeListId);
-  if (!list) return;
+  const nomeInput = document.getElementById('produto-nome');
+  const catInput = document.getElementById('produto-categoria');
+  const qtdInput = document.getElementById('produto-quantidade');
+  const precoInput = document.getElementById('produto-valor-unitario');
 
-  const novoOrcamento = parseFloat(document.getElementById('novo-orcamento-input').value) || 0;
+  const name = nomeInput.value.trim();
+  const category = catInput.value;
+  const quantity = parseFloat(qtdInput.value) || 1;
+  const unitPrice = parseFloat(precoInput.value) || 0;
+
+  if (!name) {
+    alert('Informe o nome do produto.');
+    nomeInput.focus();
+    return;
+  }
+
+  const newItem = {
+    id: generateId(),
+    name,
+    category,
+    quantity,
+    unitPrice,
+    checked: false
+  };
+
   vibrateDevice(20);
-  list.budget = novoOrcamento;
-  saveState();
-  closeModalEditarOrcamento();
+  const updatedList = await db.addItem(state.activeListId, newItem);
+  if (updatedList) {
+    const idx = state.lists.findIndex(l => l.id === state.activeListId);
+    if (idx !== -1) state.lists[idx] = updatedList;
+  }
+
+  // Limpa formulário e fecha Bottom Sheet
+  document.getElementById('form-novo-produto').reset();
+  document.getElementById('produto-quantidade').value = '1';
+  updateSubtotalPreview();
+  closeSheet('sheet-novo-produto');
+
+  // Recalcula e atualiza tela instantaneamente
+  renderListDetail(state.activeListId);
+}
+
+async function handleUpdateBudget(e) {
+  e.preventDefault();
+  if (!state.activeListId) return;
+
+  const input = document.getElementById('novo-orcamento-input');
+  const novoOrcamento = parseFloat(input.value) || 0;
+
+  vibrateDevice(20);
+  const updatedList = await db.updateBudget(state.activeListId, novoOrcamento);
+  if (updatedList) {
+    const idx = state.lists.findIndex(l => l.id === state.activeListId);
+    if (idx !== -1) state.lists[idx] = updatedList;
+  }
+
+  closeSheet('modal-editar-orcamento');
   renderListDetail(state.activeListId);
 }
 
 // ==========================================================
-// Instalação do Aplicativo PWA (Web / Android / iOS)
+// Configurações Supabase Cloud (Opcional)
 // ==========================================================
 
-function setupPwaInstallation() {
-  const btnInstall = document.getElementById('btn-instalar-app');
-  const banner = document.getElementById('pwa-install-banner');
-  const btnConfirm = document.getElementById('btn-pwa-confirm');
-  const btnDismiss = document.getElementById('btn-pwa-dismiss');
+async function loadSupabaseConfig() {
+  const url = await db.getConfig('supabase_url');
+  const key = await db.getConfig('supabase_key');
+  if (url) document.getElementById('supabase-url').value = url;
+  if (key) document.getElementById('supabase-key').value = key;
+}
 
-  // Captura o evento nativo de instalação
+async function handleSaveSupabaseConfig(e) {
+  e.preventDefault();
+  const url = document.getElementById('supabase-url').value.trim();
+  const key = document.getElementById('supabase-key').value.trim();
+
+  await db.setConfig('supabase_url', url);
+  await db.setConfig('supabase_key', key);
+  vibrateDevice(30);
+
+  alert('Configurações salvas com sucesso!');
+  closeSheet('modal-config-db');
+}
+
+// ==========================================================
+// PWA Installation & Service Worker
+// ==========================================================
+
+function setupPwa() {
+  const btnInstall = document.getElementById('btn-instalar-app');
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-
-    // Mostra o botão no topo
     if (btnInstall) btnInstall.classList.remove('hidden');
-
-    // Mostra o banner se o usuário ainda não dispensou nesta sessão
-    if (!sessionStorage.getItem('pwa_banner_dismissed') && banner) {
-      banner.classList.remove('hidden');
-    }
   });
 
-  async function triggerInstall() {
-    if (!deferredInstallPrompt) return;
-    
-    // Executa a caixa de diálogo nativa de instalação do Android/Chrome
-    deferredInstallPrompt.prompt();
-    const { outcome } = await deferredInstallPrompt.userChoice;
-    console.log(`Resultado da instalação: ${outcome}`);
-
-    deferredInstallPrompt = null;
-    if (btnInstall) btnInstall.classList.add('hidden');
-    if (banner) banner.classList.add('hidden');
-  }
-
   if (btnInstall) {
-    btnInstall.addEventListener('click', triggerInstall);
-  }
-
-  if (btnConfirm) {
-    btnConfirm.addEventListener('click', triggerInstall);
-  }
-
-  if (btnDismiss) {
-    btnDismiss.addEventListener('click', () => {
-      sessionStorage.setItem('pwa_banner_dismissed', 'true');
-      if (banner) banner.classList.add('hidden');
+    btnInstall.addEventListener('click', async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      console.log('Resultado da instalação:', outcome);
+      deferredInstallPrompt = null;
+      btnInstall.classList.add('hidden');
     });
   }
 
   window.addEventListener('appinstalled', () => {
     deferredInstallPrompt = null;
     if (btnInstall) btnInstall.classList.add('hidden');
-    if (banner) banner.classList.add('hidden');
-    console.log('Lista de Compras Plus foi instalada com sucesso como aplicativo!');
   });
-}
 
-function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then((reg) => {
-          console.log('Service Worker registrado com sucesso:', reg.scope);
-        })
-        .catch((err) => {
-          console.warn('Falha no registro do Service Worker:', err);
-        });
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('Falha no Service Worker:', err);
+      });
     });
   }
 }
 
 // ==========================================================
-// Sanitização Simples de Texto
-// ==========================================================
-
-function escapeHtml(text) {
-  if (!text) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-// ==========================================================
-// Inicialização dos Event Listeners
+// Inicialização de Listeners
 // ==========================================================
 
 function setupEventListeners() {
   // Navegação
   document.getElementById('btn-voltar-dashboard').addEventListener('click', showDashboard);
-  
-  // Botões de Nova Lista
-  document.getElementById('btn-nova-lista').addEventListener('click', openModalNovaLista);
-  document.getElementById('btn-empty-criar-lista').addEventListener('click', openModalNovaLista);
-  document.getElementById('btn-fechar-modal').addEventListener('click', closeModalNovaLista);
-  document.getElementById('btn-cancelar-modal').addEventListener('click', closeModalNovaLista);
+
+  // Floating Action Button (FAB): ação sensível ao contexto
+  document.getElementById('fab-action-btn').addEventListener('click', () => {
+    vibrateDevice(20);
+    if (state.activeListId) {
+      // Dentro de uma lista -> Adicionar Mercadoria
+      document.getElementById('produto-nome').value = '';
+      document.getElementById('produto-valor-unitario').value = '';
+      document.getElementById('produto-quantidade').value = '1';
+      updateSubtotalPreview();
+      openSheet('sheet-novo-produto');
+      setTimeout(() => document.getElementById('produto-nome').focus(), 150);
+    } else {
+      // No dashboard -> Nova Lista
+      document.getElementById('form-nova-lista').reset();
+      openSheet('sheet-nova-lista');
+      setTimeout(() => document.getElementById('nova-lista-nome').focus(), 150);
+    }
+  });
+
+  // Botões de Estado Vazio
+  document.getElementById('btn-criar-primeira-lista').addEventListener('click', () => {
+    openSheet('sheet-nova-lista');
+  });
+
+  // Fechar Bottom Sheets
+  document.getElementById('btn-fechar-sheet-produto').addEventListener('click', () => closeSheet('sheet-novo-produto'));
+  document.getElementById('btn-fechar-sheet-lista').addEventListener('click', () => closeSheet('sheet-nova-lista'));
+  document.getElementById('btn-fechar-modal-orcamento').addEventListener('click', () => closeSheet('modal-editar-orcamento'));
+  document.getElementById('btn-fechar-modal-db').addEventListener('click', () => closeSheet('modal-config-db'));
+
+  // Fechar ao clicar no backdrop escuro
+  window.addEventListener('click', (e) => {
+    if (e.target.classList.contains('bottom-sheet-backdrop')) {
+      closeAllSheets();
+    }
+  });
+
+  // Submissão dos Formulários
   document.getElementById('form-nova-lista').addEventListener('submit', handleCreateList);
-
-  // Alterar Orçamento
-  document.getElementById('btn-editar-orcamento').addEventListener('click', openModalEditarOrcamento);
-  document.getElementById('btn-fechar-modal-orcamento').addEventListener('click', closeModalEditarOrcamento);
-  document.getElementById('btn-cancelar-modal-orcamento').addEventListener('click', closeModalEditarOrcamento);
-  document.getElementById('form-editar-orcamento').addEventListener('submit', handleUpdateBudget);
-
-  // Formulário de Adicionar Produto
   document.getElementById('form-novo-produto').addEventListener('submit', handleAddProduct);
+  document.getElementById('form-editar-orcamento').addEventListener('submit', handleUpdateBudget);
+  document.getElementById('form-config-supabase').addEventListener('submit', handleSaveSupabaseConfig);
 
-  // Preview de Subtotal ao digitar
+  // Botão Orçamento
+  document.getElementById('btn-editar-orcamento').addEventListener('click', () => {
+    const list = state.lists.find(l => l.id === state.activeListId);
+    if (list) {
+      document.getElementById('novo-orcamento-input').value = list.budget;
+      openSheet('modal-editar-orcamento');
+    }
+  });
+
+  // Botão Configurações Banco de Dados
+  document.getElementById('btn-abrir-config').addEventListener('click', () => {
+    loadSupabaseConfig();
+    openSheet('modal-config-db');
+  });
+
+  // Stepper de Quantidade
   const qtdInput = document.getElementById('produto-quantidade');
   const precoInput = document.getElementById('produto-valor-unitario');
   
   qtdInput.addEventListener('input', updateSubtotalPreview);
   precoInput.addEventListener('input', updateSubtotalPreview);
 
-  // Stepper de Quantidade (+ / -)
   document.getElementById('btn-qty-minus').addEventListener('click', () => {
-    let current = parseFloat(qtdInput.value) || 1;
-    if (current > 1) {
-      qtdInput.value = current - 1;
+    let cur = parseFloat(qtdInput.value) || 1;
+    if (cur > 1) {
+      qtdInput.value = cur - 1;
       updateSubtotalPreview();
     }
   });
 
   document.getElementById('btn-qty-plus').addEventListener('click', () => {
-    let current = parseFloat(qtdInput.value) || 0;
-    qtdInput.value = current + 1;
+    let cur = parseFloat(qtdInput.value) || 0;
+    qtdInput.value = cur + 1;
     updateSubtotalPreview();
   });
 
-  // Filtro de Categorias de Produtos
-  document.getElementById('filtro-categoria-item').addEventListener('change', (e) => {
-    state.filterCategory = e.target.value;
-    if (state.activeListId) {
-      const list = state.lists.find(l => l.id === state.activeListId);
-      if (list) renderItemsTable(list);
-    }
+  // Carrossel de Chips de Categorias
+  document.querySelectorAll('#chips-categorias .chip-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      document.querySelectorAll('#chips-categorias .chip-btn').forEach(b => b.classList.remove('active'));
+      e.currentTarget.classList.add('active');
+      state.filterCategory = e.currentTarget.dataset.cat;
+      vibrateDevice(10);
+      if (state.activeListId) {
+        const list = state.lists.find(l => l.id === state.activeListId);
+        if (list) renderProductCards(list);
+      }
+    });
   });
 
-  // Fechar modais ao clicar no backdrop escuro
-  window.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal-backdrop')) {
-      closeModalNovaLista();
-      closeModalEditarOrcamento();
-    }
-  });
-
-  // Configuração PWA
-  setupPwaInstallation();
+  // PWA
+  setupPwa();
 }
 
 // Inicializar aplicação
-document.addEventListener('DOMContentLoaded', () => {
-  loadState();
+document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
-  registerServiceWorker();
-  renderDashboard();
+  await loadDataFromDb();
 });

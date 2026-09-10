@@ -3,12 +3,13 @@
  * Suporte completo a funcionamento offline e carregamento instantâneo
  */
 
-const CACHE_NAME = 'compras-plus-v1';
+const CACHE_NAME = 'compras-plus-v2';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
   './style.css',
+  './db.js',
   './app.js',
   './manifest.json',
   './icons/favicon.svg',
