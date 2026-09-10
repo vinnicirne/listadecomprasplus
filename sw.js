@@ -3,7 +3,7 @@
  * Suporte completo a funcionamento offline e carregamento instantâneo
  */
 
-const CACHE_NAME = 'compras-plus-v2';
+const CACHE_NAME = 'compras-plus-v3';
 
 const STATIC_ASSETS = [
   './',
@@ -12,10 +12,12 @@ const STATIC_ASSETS = [
   './db.js',
   './app.js',
   './manifest.json',
+  './icons/favicon.png',
   './icons/favicon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-maskable.png'
+  './icons/icon-maskable.png',
+  './icons/app-icon.png'
 ];
 
 // Instalação do Service Worker e pré-cache dos arquivos
