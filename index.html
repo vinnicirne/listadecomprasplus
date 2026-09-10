@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista de Compras & Orçamento Inteligente</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Principal -->
+    <header class="app-header">
+      <div class="header-brand">
+        <span class="brand-icon">🛒</span>
+        <div>
+          <h1 class="brand-title">Lista de Compras</h1>
+          <p class="brand-subtitle">Controle de orçamento e saldo em tempo real</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-nova-lista" class="btn btn-primary">
+          <span class="btn-icon">+</span> Nova Lista
+        </button>
+      </div>
+    </header>
+
+    <!-- Tela 1: Visão Geral de Listas (Dashboard) -->
+    <main id="view-dashboard" class="view active">
+      <div class="section-title-bar">
+        <h2>Minhas Listas</h2>
+        <span id="total-listas-badge" class="badge">0 listas</span>
+      </div>
+
+      <div id="listas-grid" class="listas-grid">
+        <!-- Cards de listas injetados via JavaScript -->
+      </div>
+
+      <!-- Estado Vazio para quando não houver listas -->
+      <div id="empty-state-listas" class="empty-state hidden">
+        <div class="empty-icon">📝</div>
+        <h3>Nenhuma lista criada ainda</h3>
+        <p>Crie sua primeira lista de compras com orçamento para começar.</p>
+        <button id="btn-empty-criar-lista" class="btn btn-primary" style="margin-top: 1rem;">
+          + Criar Nova Lista
+        </button>
+      </div>
+    </main>
+
+    <!-- Tela 2: Detalhe da Lista Selecionada -->
+    <main id="view-lista-detalhe" class="view hidden">
+      <!-- Navegação de Retorno -->
+      <div class="nav-voltar-bar">
+        <button id="btn-voltar-dashboard" class="btn btn-secondary">
+          ← Voltar para Minhas Listas
+        </button>
+        <div class="lista-detalhe-tags">
+          <span id="detalhe-categoria-lista" class="badge-tag">Supermercado</span>
+        </div>
+      </div>
+
+      <!-- Card do Painel Financeiro e Progresso -->
+      <section class="budget-panel">
+        <div class="budget-header">
+          <div>
+            <h2 id="detalhe-nome-lista" class="detalhe-titulo">Nome da Lista</h2>
+            <p class="text-muted" id="detalhe-subtitulo">Gerencie os itens e acompanhe o orçamento restante</p>
+          </div>
+          <button id="btn-editar-orcamento" class="btn btn-outline btn-sm" title="Alterar orçamento">
+            ✏️ Alterar Orçamento
+          </button>
+        </div>
+
+        <!-- Indicadores de Valores -->
+        <div class="budget-metrics">
+          <div class="metric-card">
+            <span class="metric-label">Orçamento Total</span>
+            <span id="metric-orcamento" class="metric-value">R$ 0,00</span>
+          </div>
+
+          <div class="metric-card">
+            <span class="metric-label">Total em Compras</span>
+            <span id="metric-gasto" class="metric-value text-gasto">R$ 0,00</span>
+          </div>
+
+          <div class="metric-card metric-destaque" id="card-saldo-disponivel">
+            <span class="metric-label">Saldo Disponível</span>
+            <span id="metric-saldo" class="metric-value text-saldo">R$ 0,00</span>
+            <span id="metric-saldo-status" class="metric-status">Dentro do limite</span>
+          </div>
+        </div>
+
+        <!-- Barra de Progresso do Orçamento -->
+        <div class="progress-section">
+          <div class="progress-labels">
+            <span>Consumo do Orçamento: <strong id="progress-percent-text">0%</strong></span>
+            <span id="progress-status-msg" class="progress-status-text">Seguro</span>
+          </div>
+          <div class="progress-bar-container">
+            <div id="budget-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Formulário de Adicionar Mercadoria -->
+      <section class="add-product-section">
+        <h3>Adicionar Mercadoria</h3>
+        <form id="form-novo-produto" class="product-form">
+          <div class="form-row-main">
+            <!-- Nome do Produto -->
+            <div class="form-group flex-2">
+              <label for="produto-nome">Nome da Mercadoria *</label>
+              <input type="text" id="produto-nome" placeholder="Ex: Arroz 5kg, Leite, Café..." required autocomplete="off">
+            </div>
+
+            <!-- Categoria da Mercadoria -->
+            <div class="form-group flex-1">
+              <label for="produto-categoria">Categoria do Produto *</label>
+              <select id="produto-categoria" required>
+                <option value="Mercearia">🌾 Mercearia</option>
+                <option value="Hortifrúti">🍎 Hortifrúti</option>
+                <option value="Carnes & Aves">🥩 Carnes & Aves</option>
+                <option value="Laticínios & Frios">🧀 Laticínios & Frios</option>
+                <option value="Bebidas">🧃 Bebidas</option>
+                <option value="Limpeza">🧹 Limpeza</option>
+                <option value="Higiene Pessoal">🧴 Higiene Pessoal</option>
+                <option value="Padaria">🍞 Padaria</option>
+                <option value="Congelados">🧊 Congelados</option>
+                <option value="Outros">📦 Outros</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-calc">
+            <!-- Quantidade -->
+            <div class="form-group">
+              <label for="produto-quantidade">Quantidade *</label>
+              <div class="qty-stepper">
+                <button type="button" id="btn-qty-minus" class="btn-step">−</button>
+                <input type="number" id="produto-quantidade" min="0.01" step="any" value="1" required>
+                <button type="button" id="btn-qty-plus" class="btn-step">+</button>
+              </div>
+            </div>
+
+            <!-- Valor Unitário -->
+            <div class="form-group">
+              <label for="produto-valor-unitario">Valor Unitário (R$) *</label>
+              <div class="input-prefix-wrapper">
+                <span class="input-prefix">R$</span>
+                <input type="number" id="produto-valor-unitario" min="0" step="0.01" placeholder="0,00" required>
+              </div>
+            </div>
+
+            <!-- Subtotal Calculado Instantâneo -->
+            <div class="form-group subtotal-box">
+              <label>Subtotal do Item</label>
+              <div class="subtotal-display">
+                <span id="preview-subtotal">R$ 0,00</span>
+              </div>
+            </div>
+
+            <!-- Botão Adicionar -->
+            <div class="form-group btn-adicionar-col">
+              <label>&nbsp;</label>
+              <button type="submit" id="btn-adicionar-produto" class="btn btn-success">
+                + Adicionar Item
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Lista de Mercadorias Cadastradas -->
+      <section class="products-list-section">
+        <div class="products-header">
+          <div class="products-title-group">
+            <h3>Itens da Lista</h3>
+            <span id="itens-contador" class="badge">0 itens</span>
+          </div>
+
+          <!-- Filtro rápido por categoria -->
+          <div class="filter-group">
+            <label for="filtro-categoria-item" class="sr-only">Filtrar por Categoria</label>
+            <select id="filtro-categoria-item" class="select-sm">
+              <option value="TODAS">Todas as Categorias</option>
+              <option value="Mercearia">🌾 Mercearia</option>
+              <option value="Hortifrúti">🍎 Hortifrúti</option>
+              <option value="Carnes & Aves">🥩 Carnes & Aves</option>
+              <option value="Laticínios & Frios">🧀 Laticínios & Frios</option>
+              <option value="Bebidas">🧃 Bebidas</option>
+              <option value="Limpeza">🧹 Limpeza</option>
+              <option value="Higiene Pessoal">🧴 Higiene Pessoal</option>
+              <option value="Padaria">🍞 Padaria</option>
+              <option value="Congelados">🧊 Congelados</option>
+              <option value="Outros">📦 Outros</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tabela responsiva de Itens -->
+        <div class="table-container">
+          <table class="products-table">
+            <thead>
+              <tr>
+                <th width="40">Status</th>
+                <th>Mercadoria</th>
+                <th>Categoria</th>
+                <th>Qtd</th>
+                <th>Valor Unit.</th>
+                <th>Subtotal</th>
+                <th width="60">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="produtos-table-body">
+              <!-- Itens injetados pelo JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="empty-state-produtos" class="empty-state hidden">
+          <div class="empty-icon">🛒</div>
+          <p>Nenhum produto cadastrado nesta lista ainda.</p>
+          <small>Use o formulário acima para adicionar itens e acompanhar o saldo disponível.</small>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Criar Nova Lista -->
+    <div id="modal-nova-lista" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Criar Nova Lista de Compras</h3>
+          <button id="btn-fechar-modal" class="btn-close">&times;</button>
+        </div>
+        <form id="form-nova-lista">
+          <div class="form-group">
+            <label for="nova-lista-nome">Nome da Lista *</label>
+            <input type="text" id="nova-lista-nome" placeholder="Ex: Compras do Mês, Feira de Sábado..." required>
+          </div>
+
+          <div class="form-group">
+            <label for="nova-lista-categoria">Categoria da Lista *</label>
+            <select id="nova-lista-categoria" required>
+              <option value="Supermercado">🛒 Supermercado Geral</option>
+              <option value="Feira & Hortifrúti">🥬 Feira & Hortifrúti</option>
+              <option value="Açougue & Carnes">🥩 Açougue & Carnes</option>
+              <option value="Farmácia">💊 Farmácia & Saúde</option>
+              <option value="Padaria & Confeitaria">🥖 Padaria & Confeitaria</option>
+              <option value="Casa & Construção">🏠 Casa & Construção</option>
+              <option value="Pet Shop">🐾 Pet Shop</option>
+              <option value="Churrasco & Eventos">🔥 Churrasco & Eventos</option>
+              <option value="Outros">📋 Outros</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="nova-lista-orcamento">Orçamento Estipulado (R$) *</label>
+            <div class="input-prefix-wrapper">
+              <span class="input-prefix">R$</span>
+              <input type="number" id="nova-lista-orcamento" min="0" step="0.01" placeholder="Ex: 350,00" required>
+            </div>
+            <small class="text-muted">Valor máximo planejado para esta compra.</small>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" id="btn-cancelar-modal" class="btn btn-secondary">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Salvar Lista</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Editar Orçamento -->
+    <div id="modal-editar-orcamento" class="modal-backdrop hidden">
+      <div class="modal-card modal-sm">
+        <div class="modal-header">
+          <h3>Atualizar Orçamento</h3>
+          <button id="btn-fechar-modal-orcamento" class="btn-close">&times;</button>
+        </div>
+        <form id="form-editar-orcamento">
+          <div class="form-group">
+            <label for="novo-orcamento-input">Novo Orçamento da Lista (R$) *</label>
+            <div class="input-prefix-wrapper">
+              <span class="input-prefix">R$</span>
+              <input type="number" id="novo-orcamento-input" min="0" step="0.01" required>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="btn-cancelar-modal-orcamento" class="btn btn-secondary">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
