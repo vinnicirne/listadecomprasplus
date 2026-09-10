@@ -493,10 +493,26 @@ async function handleUpdateBudget(e) {
 // ==========================================================
 
 async function loadSupabaseConfig() {
-  const url = await db.getConfig('supabase_url');
-  const key = await db.getConfig('supabase_key');
+  const url = (await db.getConfig('supabase_url')) || db.supabaseUrl;
+  const key = (await db.getConfig('supabase_key')) || db.supabaseKey;
   if (url) document.getElementById('supabase-url').value = url;
   if (key) document.getElementById('supabase-key').value = key;
+
+  const statusEl = document.getElementById('db-status-text');
+  if (statusEl) {
+    statusEl.textContent = 'Verificando conexão com o Supabase Cloud...';
+    const status = await db.checkCloudStatus();
+    if (status.connected && status.tableReady) {
+      statusEl.innerHTML = '🟢 <strong>Conectado e Sincronizado:</strong> Tabela "listas" ativa no Supabase.';
+      statusEl.style.color = 'var(--success-text)';
+    } else if (status.connected && !status.tableReady) {
+      statusEl.innerHTML = '🟡 <strong>Conexão Válida com o Supabase!</strong> Falta apenas executar o script <code>schema.sql</code> no SQL Editor do Supabase para criar a tabela.';
+      statusEl.style.color = 'var(--warning-text)';
+    } else {
+      statusEl.innerHTML = `🔵 <strong>Modo Local Offline:</strong> Operando via IndexedDB no aparelho. (${status.message})`;
+      statusEl.style.color = 'var(--text-muted)';
+    }
+  }
 }
 
 async function handleSaveSupabaseConfig(e) {
@@ -504,12 +520,15 @@ async function handleSaveSupabaseConfig(e) {
   const url = document.getElementById('supabase-url').value.trim();
   const key = document.getElementById('supabase-key').value.trim();
 
+  db.supabaseUrl = url;
+  db.supabaseKey = key;
   await db.setConfig('supabase_url', url);
   await db.setConfig('supabase_key', key);
   vibrateDevice(30);
 
-  alert('Configurações salvas com sucesso!');
-  closeSheet('modal-config-db');
+  await loadSupabaseConfig();
+  await loadDataFromDb();
+  alert('Configurações salvas e conexão testada!');
 }
 
 // ==========================================================
