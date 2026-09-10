@@ -1,9 +1,10 @@
 /**
  * Service Worker - Lista de Compras Plus (PWA)
- * Suporte completo a funcionamento offline e carregamento instantâneo
+ * Suporte completo a funcionamento offline, carregamento instantâneo
+ * e estratégia Network-First para atualização imediata de arquivos do app.
  */
 
-const CACHE_NAME = 'compras-plus-v3';
+const CACHE_NAME = 'compras-plus-v4';
 
 const STATIC_ASSETS = [
   './',
@@ -31,7 +32,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Ativação e limpeza de versões antigas do cache
+// Ativação e limpeza imediata de versões antigas do cache
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -44,35 +45,54 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Estratégia de Fetch: Cache First com Fallback para a Rede
+// Estratégia de Fetch: Network-First para arquivos locais do app, com fallback offline
 self.addEventListener('fetch', (event) => {
-  // Ignora requisições não GET ou protocolos externos específicos
   if (event.request.method !== 'GET') return;
 
+  const requestUrl = new URL(event.request.url);
+
+  // Se a requisição for para o mesmo domínio (arquivos do app)
+  if (requestUrl.origin === self.location.origin) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Se a rede falhar ou estiver offline, busca no cache
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            if (event.request.mode === 'navigate') {
+              return caches.match('./index.html');
+            }
+          });
+        })
+    );
+    return;
+  }
+
+  // Recursos de terceiros (ex: Google Fonts): Cache-First
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Retorna do cache se encontrado
         return cachedResponse;
       }
-
-      // Se não estiver no cache, busca na rede e armazena em cache
       return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
         }
-
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
         return networkResponse;
-      }).catch(() => {
-        // Fallback para navegação offline caso a rede falhe
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
       });
     })
   );

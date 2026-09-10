@@ -75,6 +75,21 @@ body {
 }
 
 /* ==========================================================
+   Visibilidade de Telas (Views)
+   ========================================================== */
+.hidden {
+  display: none !important;
+}
+
+.view {
+  display: block;
+}
+
+.view.hidden {
+  display: none !important;
+}
+
+/* ==========================================================
    Header Mobile (Barra Superior)
    ========================================================== */
 .mobile-header {

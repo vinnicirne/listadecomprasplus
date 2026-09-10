@@ -175,12 +175,61 @@ class Database {
   }
 
   async getListById(id) {
-    const store = await this.getStore('listas', 'readonly');
-    return new Promise((resolve, reject) => {
-      const request = store.get(id);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
+    await this.init();
+    try {
+      const store = await this.getStore('listas', 'readonly');
+      const local = await new Promise((resolve) => {
+        const req = store.get(id);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+      if (local) return local;
+
+      // Se id for string numérica ou número, tenta o formato alternativo
+      const altId = typeof id === 'number' ? String(id) : (!isNaN(Number(id)) ? Number(id) : null);
+      if (altId !== null) {
+        const altLocal = await new Promise((resolve) => {
+          const req = store.get(altId);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+        if (altLocal) return altLocal;
+      }
+    } catch (err) {
+      console.warn('Erro ao consultar IndexedDB:', err);
+    }
+
+    // Fallback: Busca diretamente na nuvem (Supabase)
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const endpoint = `${this.supabaseUrl}/rest/v1/listas?id=eq.${encodeURIComponent(id)}&limit=1`;
+        const res = await fetch(endpoint, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows && rows.length > 0) {
+            const row = rows[0];
+            const cloudList = {
+              id: row.id,
+              name: row.name,
+              category: row.category,
+              budget: Number(row.budget) || 0,
+              items: Array.isArray(row.items) ? row.items : [],
+              createdAt: row.created_at || new Date().toISOString()
+            };
+            await this.saveLocalList(cloudList);
+            return cloudList;
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao buscar lista na nuvem:', err);
+      }
+    }
+
+    return null;
   }
 
   /**

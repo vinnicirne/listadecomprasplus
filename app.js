@@ -149,7 +149,7 @@ function renderDashboard() {
     const qtdItens = (list.items || []).length;
 
     return `
-      <div class="card-lista-item" onclick="openList('${list.id}')">
+      <div class="card-lista-item" onclick="openList('${list.id}', event)">
         <div class="card-lista-header">
           <div>
             <h3 class="card-lista-title">${escapeHtml(list.name)}</h3>
@@ -175,6 +175,10 @@ function renderDashboard() {
             Saldo: ${formatCurrency(saldoDisponivel)} (${saldoStatus})
           </span>
         </div>
+
+        <button class="btn btn-primary btn-sm" style="width: 100%; margin-top: 0.75rem; min-height: 42px; font-size: 0.9rem;" onclick="openList('${list.id}', event)">
+          Abrir Lista & Itens →
+        </button>
       </div>
     `;
   }).join('');
@@ -185,13 +189,23 @@ function renderDashboard() {
 // ==========================================================
 
 async function renderListDetail(listId) {
-  const list = state.lists.find(l => l.id === listId);
+  let list = state.lists.find(l => String(l.id) === String(listId));
   if (!list) {
+    try {
+      list = await db.getListById(listId);
+      if (list) state.lists.unshift(list);
+    } catch (e) {
+      console.warn('Erro ao buscar lista do banco:', e);
+    }
+  }
+
+  if (!list) {
+    console.warn('Lista não encontrada para ID:', listId);
     showDashboard();
     return;
   }
 
-  state.activeListId = listId;
+  state.activeListId = String(list.id);
 
   // Atualizar cabeçalho da lista
   document.getElementById('detalhe-nome-lista').textContent = list.name;
@@ -239,8 +253,10 @@ async function renderListDetail(listId) {
   renderProductCards(list);
 
   // Trocar telas
-  document.getElementById('view-dashboard').classList.add('hidden');
-  document.getElementById('view-lista-detalhe').classList.remove('hidden');
+  const viewDash = document.getElementById('view-dashboard');
+  const viewDetail = document.getElementById('view-lista-detalhe');
+  if (viewDash) viewDash.classList.add('hidden');
+  if (viewDetail) viewDetail.classList.remove('hidden');
 }
 
 function renderProductCards(list) {
@@ -306,21 +322,34 @@ function renderProductCards(list) {
 // Ações de Navegação e Interação
 // ==========================================================
 
-function openList(listId) {
+async function openList(listId, event) {
+  if (event) {
+    event.stopPropagation();
+  }
   state.filterCategory = 'TODAS';
   document.querySelectorAll('#chips-categorias .chip-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.cat === 'TODAS');
   });
-  renderListDetail(listId);
+  await renderListDetail(listId);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function showDashboard() {
   state.activeListId = null;
-  document.getElementById('view-lista-detalhe').classList.add('hidden');
-  document.getElementById('view-dashboard').classList.remove('hidden');
+  const viewDash = document.getElementById('view-dashboard');
+  const viewDetail = document.getElementById('view-lista-detalhe');
+  if (viewDetail) viewDetail.classList.add('hidden');
+  if (viewDash) viewDash.classList.remove('hidden');
   renderDashboard();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// Exposição explícita no window para garantir chamada em eventos inline
+window.openList = openList;
+window.showDashboard = showDashboard;
+window.handleDeleteList = handleDeleteList;
+window.handleToggleItem = handleToggleItem;
+window.handleDeleteItem = handleDeleteItem;
 
 async function handleDeleteList(listId, event) {
   if (event) event.stopPropagation();
