@@ -2,11 +2,28 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lista de Compras & Orçamento Inteligente</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Lista de Compras Plus & Orçamento Inteligente</title>
+  
+  <!-- PWA & Mobile Meta Tags -->
+  <meta name="description" content="Controle inteligente de compras com orçamento e dedução de saldo em tempo real.">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Compras Plus">
+
+  <!-- Links de Manifesto e Ícones -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- Tipografia -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Estilos -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,16 +33,35 @@
       <div class="header-brand">
         <span class="brand-icon">🛒</span>
         <div>
-          <h1 class="brand-title">Lista de Compras</h1>
+          <h1 class="brand-title">Lista de Compras Plus</h1>
           <p class="brand-subtitle">Controle de orçamento e saldo em tempo real</p>
         </div>
       </div>
       <div class="header-actions">
+        <!-- Botão de Instalação do PWA (ativado quando o navegador permitir) -->
+        <button id="btn-instalar-app" class="btn btn-install hidden" title="Instalar aplicativo no celular ou computador">
+          <span class="btn-icon">📲</span> Instalar App
+        </button>
         <button id="btn-nova-lista" class="btn btn-primary">
           <span class="btn-icon">+</span> Nova Lista
         </button>
       </div>
     </header>
+
+    <!-- Banner Toast de Notificação de Instalação PWA -->
+    <div id="pwa-install-banner" class="pwa-banner hidden">
+      <div class="pwa-banner-content">
+        <span class="pwa-banner-icon">📱</span>
+        <div>
+          <strong>Instalar Lista de Compras</strong>
+          <p>Instale na tela inicial para usar como aplicativo e sem internet.</p>
+        </div>
+      </div>
+      <div class="pwa-banner-actions">
+        <button id="btn-pwa-dismiss" class="btn btn-sm btn-outline">Depois</button>
+        <button id="btn-pwa-confirm" class="btn btn-sm btn-success">Instalar Agora</button>
+      </div>
+    </div>
 
     <!-- Tela 1: Visão Geral de Listas (Dashboard) -->
     <main id="view-dashboard" class="view active">

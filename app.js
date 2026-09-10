@@ -1,6 +1,6 @@
 /**
- * Lista de Compras & Orçamento Inteligente
- * Lógica da Aplicação com persistência em LocalStorage
+ * Lista de Compras Plus & Orçamento Inteligente
+ * Lógica da Aplicação com persistência em LocalStorage e suporte a PWA (Offline & Instalação)
  */
 
 const STORAGE_KEY = 'lista_compras_dados_v1';
@@ -115,6 +115,9 @@ let state = {
   filterCategory: 'TODAS'
 };
 
+// Variável para armazenar o prompt de instalação PWA
+let deferredInstallPrompt = null;
+
 // ==========================================================
 // Funções Utilitárias & Formatação
 // ==========================================================
@@ -130,6 +133,12 @@ function getIcon(category) {
 
 function generateId() {
   return 'id_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+}
+
+function vibrateDevice(ms = 15) {
+  if ('vibrate' in navigator) {
+    try { navigator.vibrate(ms); } catch (_) {}
+  }
 }
 
 // ==========================================================
@@ -445,6 +454,7 @@ function handleDeleteList(listId, event) {
   if (!list) return;
 
   if (confirm(`Deseja realmente excluir a lista "${list.name}"?`)) {
+    vibrateDevice(30);
     state.lists = state.lists.filter(l => l.id !== listId);
     saveState();
     renderDashboard();
@@ -457,6 +467,7 @@ function handleToggleItem(listId, itemId, isChecked) {
 
   const item = list.items.find(i => i.id === itemId);
   if (item) {
+    vibrateDevice(15);
     item.checked = isChecked;
     saveState();
     renderListDetail(listId);
@@ -467,6 +478,7 @@ function handleDeleteItem(listId, itemId) {
   const list = state.lists.find(l => l.id === listId);
   if (!list) return;
 
+  vibrateDevice(20);
   list.items = list.items.filter(i => i.id !== itemId);
   saveState();
   renderListDetail(listId);
@@ -528,6 +540,7 @@ function handleAddProduct(e) {
     checked: false
   };
 
+  vibrateDevice(25);
   list.items.push(newItem);
   saveState();
   
@@ -570,6 +583,7 @@ function handleCreateList(e) {
     items: []
   };
 
+  vibrateDevice(25);
   state.lists.unshift(newList);
   saveState();
   closeModalNovaLista();
@@ -601,10 +615,85 @@ function handleUpdateBudget(e) {
   if (!list) return;
 
   const novoOrcamento = parseFloat(document.getElementById('novo-orcamento-input').value) || 0;
+  vibrateDevice(20);
   list.budget = novoOrcamento;
   saveState();
   closeModalEditarOrcamento();
   renderListDetail(state.activeListId);
+}
+
+// ==========================================================
+// Instalação do Aplicativo PWA (Web / Android / iOS)
+// ==========================================================
+
+function setupPwaInstallation() {
+  const btnInstall = document.getElementById('btn-instalar-app');
+  const banner = document.getElementById('pwa-install-banner');
+  const btnConfirm = document.getElementById('btn-pwa-confirm');
+  const btnDismiss = document.getElementById('btn-pwa-dismiss');
+
+  // Captura o evento nativo de instalação
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+
+    // Mostra o botão no topo
+    if (btnInstall) btnInstall.classList.remove('hidden');
+
+    // Mostra o banner se o usuário ainda não dispensou nesta sessão
+    if (!sessionStorage.getItem('pwa_banner_dismissed') && banner) {
+      banner.classList.remove('hidden');
+    }
+  });
+
+  async function triggerInstall() {
+    if (!deferredInstallPrompt) return;
+    
+    // Executa a caixa de diálogo nativa de instalação do Android/Chrome
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    console.log(`Resultado da instalação: ${outcome}`);
+
+    deferredInstallPrompt = null;
+    if (btnInstall) btnInstall.classList.add('hidden');
+    if (banner) banner.classList.add('hidden');
+  }
+
+  if (btnInstall) {
+    btnInstall.addEventListener('click', triggerInstall);
+  }
+
+  if (btnConfirm) {
+    btnConfirm.addEventListener('click', triggerInstall);
+  }
+
+  if (btnDismiss) {
+    btnDismiss.addEventListener('click', () => {
+      sessionStorage.setItem('pwa_banner_dismissed', 'true');
+      if (banner) banner.classList.add('hidden');
+    });
+  }
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    if (btnInstall) btnInstall.classList.add('hidden');
+    if (banner) banner.classList.add('hidden');
+    console.log('Lista de Compras Plus foi instalada com sucesso como aplicativo!');
+  });
+}
+
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then((reg) => {
+          console.log('Service Worker registrado com sucesso:', reg.scope);
+        })
+        .catch((err) => {
+          console.warn('Falha no registro do Service Worker:', err);
+        });
+    });
+  }
 }
 
 // ==========================================================
@@ -683,11 +772,15 @@ function setupEventListeners() {
       closeModalEditarOrcamento();
     }
   });
+
+  // Configuração PWA
+  setupPwaInstallation();
 }
 
 // Inicializar aplicação
 document.addEventListener('DOMContentLoaded', () => {
   loadState();
   setupEventListeners();
+  registerServiceWorker();
   renderDashboard();
 });

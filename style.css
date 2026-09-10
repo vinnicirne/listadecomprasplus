@@ -61,6 +61,9 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  /* Suporte a entalhes / Safe Areas de smartphones */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .app-container {
@@ -113,6 +116,12 @@ body {
   color: var(--text-muted);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 /* ==========================================================
    Botões e Controles
    ========================================================== */
@@ -130,6 +139,7 @@ body {
   cursor: pointer;
   transition: var(--transition);
   user-select: none;
+  touch-action: manipulation;
 }
 
 .btn:active {
@@ -164,6 +174,18 @@ body {
 .btn-success:hover {
   background-color: var(--success-hover);
   box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+}
+
+.btn-install {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.btn-install:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
 }
 
 .btn-outline {
@@ -214,6 +236,70 @@ body {
 
 .btn-delete:hover {
   background: var(--danger-bg);
+}
+
+/* ==========================================================
+   Banner Toast PWA (Instalação)
+   ========================================================== */
+.pwa-banner {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 2rem);
+  max-width: 480px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  z-index: 1000;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pwa-banner.hidden {
+  display: none !important;
+}
+
+.pwa-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pwa-banner-icon {
+  font-size: 1.75rem;
+}
+
+.pwa-banner-content strong {
+  font-size: 0.95rem;
+  display: block;
+}
+
+.pwa-banner-content p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.pwa-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* ==========================================================
@@ -724,6 +810,7 @@ select:focus {
 
 .table-container {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .products-table {
@@ -763,8 +850,8 @@ select:focus {
 }
 
 .item-checkbox {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   accent-color: var(--primary);
   cursor: pointer;
 }
@@ -878,26 +965,30 @@ select:focus {
 }
 
 /* ==========================================================
-   Responsividade Mobile
+   Responsividade Mobile (Smartphone & Tablet)
    ========================================================== */
 @media (max-width: 768px) {
   .app-container {
-    padding: 1rem 0.75rem;
+    padding: 0.75rem 0.65rem 4.5rem 0.65rem;
   }
 
   .app-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-    padding: 1.25rem;
+    align-items: stretch;
+    gap: 0.85rem;
+    padding: 1rem 1.15rem;
   }
 
   .header-actions {
     width: 100%;
+    display: flex;
+    gap: 0.5rem;
   }
 
   .header-actions .btn {
-    width: 100%;
+    flex: 1;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.85rem;
   }
 
   .form-row-main,
@@ -934,5 +1025,15 @@ select:focus {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.75rem;
+  }
+
+  .pwa-banner {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: 0.75rem;
+  }
+
+  .pwa-banner-actions {
+    justify-content: flex-end;
   }
 }

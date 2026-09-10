@@ -1,3 +1,11 @@
+# Dependências
+node_modules/
+package-lock.json
+
+# Builds
+android/
+www/
+
 # Sistema operacional
 .DS_Store
 Thumbs.db
