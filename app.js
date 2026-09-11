@@ -109,6 +109,50 @@ function calculateListTotals(list) {
 // ==========================================================
 
 async function loadDataFromDb() {
+  await db.loadSession();
+  const isAuth = db.isAuthenticated();
+  const isAdmin = db.isAdmin();
+
+  // Configuração só deve aparecer para o administrador
+  const btnConfig = document.getElementById('btn-abrir-config');
+  if (btnConfig) {
+    if (isAdmin) {
+      btnConfig.classList.remove('hidden');
+    } else {
+      btnConfig.classList.add('hidden');
+    }
+  }
+
+  // Se o usuário NÃO estiver autenticado: bloqueia e abre login de imediato
+  if (!isAuth) {
+    state.lists = [];
+    state.activeListId = null;
+
+    // Oculta telas de dados e botão FAB
+    document.getElementById('view-dashboard').classList.add('hidden');
+    document.getElementById('view-lista-detalhe').classList.add('hidden');
+    const fab = document.getElementById('fab-action-btn');
+    if (fab) fab.classList.add('hidden');
+
+    updateAuthUI();
+    lockAppWithAuthGate();
+    return;
+  }
+
+  // Usuário autenticado: libera o app
+  unlockAppFromAuthGate();
+
+  if (state.activeListId) {
+    document.getElementById('view-dashboard').classList.add('hidden');
+    document.getElementById('view-lista-detalhe').classList.remove('hidden');
+  } else {
+    document.getElementById('view-dashboard').classList.remove('hidden');
+    document.getElementById('view-lista-detalhe').classList.add('hidden');
+  }
+
+  const fab = document.getElementById('fab-action-btn');
+  if (fab) fab.classList.remove('hidden');
+
   try {
     state.lists = await db.getLists();
     renderDashboard();
@@ -119,6 +163,27 @@ async function loadDataFromDb() {
     renderDashboard();
     updateAuthUI();
   }
+}
+
+function lockAppWithAuthGate() {
+  const btnCloseAuth = document.getElementById('btn-fechar-sheet-auth');
+  const banner = document.getElementById('auth-gate-banner');
+
+  if (btnCloseAuth) btnCloseAuth.classList.add('hidden');
+  if (banner) banner.classList.remove('hidden');
+
+  showAuthTab('login');
+  openSheet('sheet-auth');
+}
+
+function unlockAppFromAuthGate() {
+  const btnCloseAuth = document.getElementById('btn-fechar-sheet-auth');
+  const banner = document.getElementById('auth-gate-banner');
+
+  if (btnCloseAuth) btnCloseAuth.classList.remove('hidden');
+  if (banner) banner.classList.add('hidden');
+
+  closeSheet('sheet-auth');
 }
 
 // ==========================================================
@@ -789,7 +854,10 @@ function setupEventListeners() {
   document.getElementById('btn-fechar-sheet-lista').addEventListener('click', () => closeSheet('sheet-nova-lista'));
   document.getElementById('btn-fechar-modal-orcamento').addEventListener('click', () => closeSheet('modal-editar-orcamento'));
   document.getElementById('btn-fechar-modal-db').addEventListener('click', () => closeSheet('modal-config-db'));
-  document.getElementById('btn-fechar-sheet-auth').addEventListener('click', () => closeSheet('sheet-auth'));
+  document.getElementById('btn-fechar-sheet-auth').addEventListener('click', () => {
+    if (!db.isAuthenticated()) return; // Bloqueado: usuário precisa se autenticar
+    closeSheet('sheet-auth');
+  });
   document.getElementById('btn-fechar-sheet-perfil').addEventListener('click', () => closeSheet('sheet-perfil'));
   
   const btnFecharAdmin = document.getElementById('btn-fechar-sheet-admin');
@@ -800,9 +868,54 @@ function setupEventListeners() {
   // Fechar ao clicar no backdrop escuro
   window.addEventListener('click', (e) => {
     if (e.target.classList.contains('bottom-sheet-backdrop')) {
+      // Bloqueia fechamento da tela de login se o usuário não estiver autenticado
+      if (!db.isAuthenticated() && e.target.id === 'sheet-auth') {
+        vibrateDevice(20);
+        return;
+      }
       closeAllSheets();
     }
   });
+
+  // Alternância de Abas Principais (Listas vs Histórico & Balanço)
+  const tabListas = document.getElementById('tab-nav-listas');
+  if (tabListas) {
+    tabListas.addEventListener('click', () => switchAppTab('listas'));
+  }
+
+  const tabHistorico = document.getElementById('tab-nav-historico');
+  if (tabHistorico) {
+    tabHistorico.addEventListener('click', () => switchAppTab('historico'));
+  }
+
+  // Finalizar Compra & Gravar Histórico
+  const btnAbrirConcluir = document.getElementById('btn-abrir-finalizar-compra');
+  if (btnAbrirConcluir) {
+    btnAbrirConcluir.addEventListener('click', openConcluirCompraModal);
+  }
+
+  const btnFecharConcluir = document.getElementById('btn-fechar-sheet-concluir');
+  if (btnFecharConcluir) {
+    btnFecharConcluir.addEventListener('click', () => closeSheet('sheet-concluir-compra'));
+  }
+
+  const btnConfirmarGravar = document.getElementById('btn-confirmar-gravar-historico');
+  if (btnConfirmarGravar) {
+    btnConfirmarGravar.addEventListener('click', handleConfirmarFinalizarCompra);
+  }
+
+  // Filtros do Histórico & Balanço
+  const filtroAno = document.getElementById('filtro-hist-ano');
+  const filtroMes = document.getElementById('filtro-hist-mes');
+  const filtroDia = document.getElementById('filtro-hist-dia');
+  if (filtroAno) filtroAno.addEventListener('change', handleFilterChange);
+  if (filtroMes) filtroMes.addEventListener('change', handleFilterChange);
+  if (filtroDia) filtroDia.addEventListener('change', handleFilterChange);
+
+  const btnRecarregarHist = document.getElementById('btn-recarregar-historico');
+  if (btnRecarregarHist) {
+    btnRecarregarHist.addEventListener('click', loadAndRenderHistory);
+  }
 
   // Botão Conta / Autenticação no Header
   document.getElementById('btn-header-auth').addEventListener('click', () => {
@@ -887,11 +1000,28 @@ function setupEventListeners() {
     }
   });
 
-  // Botão Configurações Banco de Dados
-  document.getElementById('btn-abrir-config').addEventListener('click', () => {
+  // Botão Configurações Banco de Dados (Exclusivo para Administrador)
+  const handleOpenDbConfig = () => {
+    if (!db.isAdmin()) {
+      alert('Acesso restrito ao administrador do sistema.');
+      return;
+    }
     loadSupabaseConfig();
     openSheet('modal-config-db');
-  });
+  };
+
+  const btnAbrirConfig = document.getElementById('btn-abrir-config');
+  if (btnAbrirConfig) {
+    btnAbrirConfig.addEventListener('click', handleOpenDbConfig);
+  }
+
+  const btnAdminConfigDb = document.getElementById('btn-admin-config-db');
+  if (btnAdminConfigDb) {
+    btnAdminConfigDb.addEventListener('click', () => {
+      closeSheet('sheet-perfil');
+      handleOpenDbConfig();
+    });
+  }
 
   // Stepper de Quantidade Inteligente (Adaptativo por Unidade)
   const qtdInput = document.getElementById('produto-quantidade');
@@ -973,6 +1103,16 @@ function updateAuthUI() {
   const user = db.getUser();
   const isAuth = db.isAuthenticated();
   const isAdmin = db.isAdmin();
+
+  // Configuração só deve aparecer para o administrador
+  const btnConfig = document.getElementById('btn-abrir-config');
+  if (btnConfig) {
+    if (isAdmin) {
+      btnConfig.classList.remove('hidden');
+    } else {
+      btnConfig.classList.add('hidden');
+    }
+  }
 
   // Controla exibição da seção exclusiva do Administrador no Perfil
   const adminSection = document.getElementById('admin-perfil-section');
@@ -1119,7 +1259,7 @@ async function handleAuthLogin(e) {
   try {
     await db.signIn(email, pass, rememberMe);
     vibrateDevice(25);
-    closeSheet('sheet-auth');
+    unlockAppFromAuthGate();
     document.getElementById('form-auth-login').reset();
     await db.migrateLocalListsToCloud();
     await loadDataFromDb();
@@ -1156,7 +1296,7 @@ async function handleAuthSignup(e) {
     vibrateDevice(30);
 
     if (db.isAuthenticated()) {
-      closeSheet('sheet-auth');
+      unlockAppFromAuthGate();
       document.getElementById('form-auth-signup').reset();
       await db.migrateLocalListsToCloud();
       await loadDataFromDb();
@@ -1189,7 +1329,9 @@ async function handleLogout() {
   if (confirm('Deseja realmente sair da sua conta?')) {
     vibrateDevice(20);
     await db.signOut();
-    closeSheet('sheet-perfil');
+    closeAllSheets();
+    state.lists = [];
+    state.activeListId = null;
     await loadDataFromDb();
   }
 }
@@ -1382,6 +1524,386 @@ function exportLeadsToCsv() {
 
   vibrateDevice(20);
 }
+
+// ==========================================================
+// Gestão de Abas da Aplicação (Minhas Listas vs Histórico & Balanço)
+// ==========================================================
+
+function switchAppTab(tabName) {
+  vibrateDevice(15);
+  const tabListas = document.getElementById('tab-nav-listas');
+  const tabHist = document.getElementById('tab-nav-historico');
+  const viewDashboard = document.getElementById('view-dashboard');
+  const viewDetalhe = document.getElementById('view-lista-detalhe');
+  const viewHistorico = document.getElementById('view-historico');
+  const fab = document.getElementById('fab-action-btn');
+
+  if (tabName === 'listas') {
+    if (tabListas) tabListas.classList.add('active');
+    if (tabHist) tabHist.classList.remove('active');
+    if (viewHistorico) viewHistorico.classList.add('hidden');
+
+    if (state.activeListId) {
+      if (viewDashboard) viewDashboard.classList.add('hidden');
+      if (viewDetalhe) viewDetalhe.classList.remove('hidden');
+    } else {
+      if (viewDashboard) viewDashboard.classList.remove('hidden');
+      if (viewDetalhe) viewDetalhe.classList.add('hidden');
+    }
+
+    if (fab) fab.classList.remove('hidden');
+  } else if (tabName === 'historico') {
+    if (tabListas) tabListas.classList.remove('active');
+    if (tabHist) tabHist.classList.add('active');
+    if (viewDashboard) viewDashboard.classList.add('hidden');
+    if (viewDetalhe) viewDetalhe.classList.add('hidden');
+    if (viewHistorico) viewHistorico.classList.remove('hidden');
+
+    if (fab) fab.classList.add('hidden');
+    loadAndRenderHistory();
+  }
+}
+
+// ==========================================================
+// Finalização de Compra & Gravação no Histórico
+// ==========================================================
+
+let activeConcluirList = null;
+
+function openConcluirCompraModal() {
+  if (!state.activeListId) return;
+  const list = state.lists.find(l => l.id === state.activeListId);
+  if (!list) return;
+
+  activeConcluirList = list;
+  const { orcamento, totalGasto, saldoDisponivel } = calculateListTotals(list);
+  const now = new Date();
+  const dateStr = `Hoje, ${now.toLocaleDateString('pt-BR')}`;
+
+  document.getElementById('concluir-lista-nome').textContent = list.name;
+  document.getElementById('concluir-lista-categoria').textContent = `${getIcon(list.category)} ${list.category}`;
+  document.getElementById('concluir-data-badge').textContent = dateStr;
+  document.getElementById('concluir-total-gasto').textContent = formatCurrency(totalGasto);
+  document.getElementById('concluir-orcamento').textContent = formatCurrency(orcamento);
+
+  const resBox = document.getElementById('concluir-resultado-box');
+  const resVal = document.getElementById('concluir-resultado-val');
+
+  if (saldoDisponivel >= 0) {
+    if (resBox) resBox.className = 'concluir-stat-item full';
+    if (resVal) {
+      resVal.textContent = `Economia de ${formatCurrency(saldoDisponivel)}`;
+      resVal.style.color = 'var(--success-text)';
+    }
+  } else {
+    if (resBox) resBox.className = 'concluir-stat-item full estouro';
+    if (resVal) {
+      resVal.textContent = `Estouro de ${formatCurrency(Math.abs(saldoDisponivel))}`;
+      resVal.style.color = 'var(--danger-text)';
+    }
+  }
+
+  openSheet('sheet-concluir-compra');
+}
+
+async function handleConfirmarFinalizarCompra() {
+  if (!activeConcluirList) return;
+  const list = activeConcluirList;
+  const { orcamento, totalGasto, saldoDisponivel } = calculateListTotals(list);
+  const btn = document.getElementById('btn-confirmar-gravar-historico');
+  const resetCheckboxes = document.getElementById('concluir-reset-checkboxes')?.checked ?? true;
+
+  btn.disabled = true;
+  btn.textContent = 'Gravando no Histórico...';
+
+  try {
+    const historyItem = {
+      listId: list.id,
+      listName: list.name,
+      category: list.category,
+      budget: orcamento,
+      totalSpent: totalGasto,
+      savings: saldoDisponivel,
+      items: (list.items || []).map(i => ({ ...i })),
+      purchasedAt: new Date().toISOString()
+    };
+
+    await db.savePurchaseHistory(historyItem);
+    vibrateDevice(30);
+
+    if (resetCheckboxes && list.items && list.items.length > 0) {
+      list.items.forEach(i => i.checked = false);
+      await db.saveList(list);
+    }
+
+    closeSheet('sheet-concluir-compra');
+    alert(`🎉 Compra finalizada com sucesso!\nTotal Gasto: ${formatCurrency(totalGasto)}\nData: ${new Date().toLocaleDateString('pt-BR')}`);
+
+    // Alterna para a tela de Histórico & Balanço para ver o resultado
+    switchAppTab('historico');
+  } catch (err) {
+    alert('Erro ao gravar compra no histórico: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Gravar no Histórico & Balanço';
+  }
+}
+
+// ==========================================================
+// Lógica de Histórico & Balanço Financeiro (Ano, Mês e Dia)
+// ==========================================================
+
+let historyCache = [];
+let historyFilter = {
+  year: new Date().getFullYear(),
+  month: 'all',
+  day: 'all'
+};
+
+async function loadAndRenderHistory() {
+  const empty = document.getElementById('empty-state-historico');
+
+  try {
+    historyCache = await db.getPurchaseHistory();
+    populateHistoryFilterOptions();
+    applyHistoryFilters();
+  } catch (err) {
+    console.error('Erro ao carregar histórico:', err);
+    if (empty) empty.classList.remove('hidden');
+  }
+}
+
+function populateHistoryFilterOptions() {
+  const selAno = document.getElementById('filtro-hist-ano');
+  const selDia = document.getElementById('filtro-hist-dia');
+  if (!selAno) return;
+
+  const years = Array.from(new Set(historyCache.map(h => h.year))).filter(Boolean);
+  const curYear = new Date().getFullYear();
+  if (!years.includes(curYear)) years.unshift(curYear);
+  years.sort((a, b) => b - a);
+
+  selAno.innerHTML = years.map(y => `<option value="${y}" ${y === historyFilter.year ? 'selected' : ''}>${y}</option>`).join('');
+
+  if (selDia && selDia.options.length <= 1) {
+    let dayOptions = '<option value="all">🗓️ Todos os Dias</option>';
+    for (let d = 1; d <= 31; d++) {
+      dayOptions += `<option value="${d}">Dia ${String(d).padStart(2, '0')}</option>`;
+    }
+    selDia.innerHTML = dayOptions;
+  }
+}
+
+function handleFilterChange() {
+  const selAno = document.getElementById('filtro-hist-ano');
+  const selMes = document.getElementById('filtro-hist-mes');
+  const selDia = document.getElementById('filtro-hist-dia');
+
+  historyFilter.year = selAno ? Number(selAno.value) : new Date().getFullYear();
+  historyFilter.month = selMes ? selMes.value : 'all';
+  historyFilter.day = selDia ? selDia.value : 'all';
+
+  applyHistoryFilters();
+}
+
+function applyHistoryFilters() {
+  const balance = db.calculateSpendingBalance(historyCache, historyFilter);
+  renderSpendingBalance(balance);
+  renderHistoryTimeline(balance.filteredPurchases);
+}
+
+function renderSpendingBalance(balance) {
+  const lblGasto = document.getElementById('balanco-total-gasto');
+  const lblOrcamento = document.getElementById('balanco-total-orcamento');
+  const lblEconomia = document.getElementById('balanco-total-economia');
+  const lblCount = document.getElementById('balanco-compras-count');
+  const lblMedia = document.getElementById('balanco-media-compra');
+  const badgeStatus = document.getElementById('balanco-badge-status');
+  const cardEconomia = document.getElementById('balanco-card-economia');
+  const anoLabel = document.getElementById('chart-ano-label');
+
+  if (lblGasto) lblGasto.textContent = formatCurrency(balance.totalSpent);
+  if (lblOrcamento) lblOrcamento.textContent = formatCurrency(balance.totalBudget);
+  if (lblCount) lblCount.textContent = `${balance.count} ${balance.count === 1 ? 'compra registrada' : 'compras registradas'}`;
+  if (lblMedia) lblMedia.textContent = `Média: ${formatCurrency(balance.averagePerPurchase)} / compra`;
+  if (anoLabel) anoLabel.textContent = balance.year;
+
+  if (lblEconomia && badgeStatus && cardEconomia) {
+    if (balance.totalSavings >= 0) {
+      lblEconomia.textContent = formatCurrency(balance.totalSavings);
+      lblEconomia.style.color = 'var(--success)';
+      badgeStatus.className = 'balanco-pill-badge';
+      badgeStatus.textContent = 'Economia no Período';
+      cardEconomia.className = 'balanco-stat-card full-width';
+    } else {
+      lblEconomia.textContent = `- ${formatCurrency(Math.abs(balance.totalSavings))}`;
+      lblEconomia.style.color = 'var(--danger)';
+      badgeStatus.className = 'balanco-pill-badge negativo';
+      badgeStatus.textContent = 'Orçamento Estourado';
+      cardEconomia.className = 'balanco-stat-card full-width negativo';
+    }
+  }
+
+  renderMonthBarsChart(balance.byMonth, balance.month);
+}
+
+function renderMonthBarsChart(byMonth, selectedMonth) {
+  const chartContainer = document.getElementById('chart-month-bars');
+  if (!chartContainer) return;
+
+  const maxSpent = Math.max(...byMonth.map(m => m.spent), 100);
+
+  chartContainer.innerHTML = byMonth.map(m => {
+    const pct = Math.max(6, Math.min(100, Math.round((m.spent / maxSpent) * 100)));
+    const isSelected = selectedMonth !== 'all' && Number(selectedMonth) === m.month;
+    const hasSpending = m.spent > 0;
+
+    return `
+      <div class="month-bar-col" title="${m.name}: ${formatCurrency(m.spent)} em ${m.count} compras">
+        <div class="month-bar-fill ${isSelected ? 'active' : (hasSpending ? '' : 'empty')}" 
+             style="height: ${pct}%; ${hasSpending ? '' : 'background: #e2e8f0; opacity: 0.5;'}">
+        </div>
+        <span class="month-bar-label ${isSelected ? 'active' : ''}">${m.name}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderHistoryTimeline(purchases) {
+  const container = document.getElementById('historico-list-container');
+  const empty = document.getElementById('empty-state-historico');
+  const tagCount = document.getElementById('historico-contador-tag');
+
+  if (tagCount) {
+    tagCount.textContent = `${purchases.length} ${purchases.length === 1 ? 'compra' : 'compras'}`;
+  }
+
+  if (!purchases || purchases.length === 0) {
+    if (container) container.innerHTML = '';
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+
+  if (empty) empty.classList.add('hidden');
+  if (!container) return;
+
+  container.innerHTML = purchases.map(p => {
+    const d = new Date(p.purchasedAt);
+    const dateFormatted = `${String(p.day).padStart(2, '0')}/${String(p.month).padStart(2, '0')}/${p.year}`;
+    const timeFormatted = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const savings = Number(p.savings);
+    const isEconomy = savings >= 0;
+    const items = p.items || [];
+
+    const itemsHtml = items.map(item => {
+      const subtotal = calculateItemSubtotal(item);
+      const unit = item.unit || 'un';
+      return `
+        <div class="historico-item-line">
+          <span>• ${escapeHtml(item.name)} (${item.quantity} ${unit})</span>
+          <strong>${formatCurrency(subtotal)}</strong>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="historico-card" id="card-hist-${p.id}">
+        <div class="historico-card-header">
+          <div>
+            <span class="historico-card-title">${getIcon(p.category)} ${escapeHtml(p.listName)}</span>
+            <span style="display:block; font-size: 0.72rem; color: var(--text-muted);">${p.category}</span>
+          </div>
+          <span class="historico-date-badge">📅 ${dateFormatted} às ${timeFormatted}</span>
+        </div>
+
+        <div class="historico-metrics-row">
+          <div class="historico-metric-item">
+            <span class="lbl">Gasto Real</span>
+            <span class="val" style="color: var(--primary);">${formatCurrency(p.totalSpent)}</span>
+          </div>
+          <div class="historico-metric-item">
+            <span class="lbl">Orçamento</span>
+            <span class="val">${formatCurrency(p.budget)}</span>
+          </div>
+          <div class="historico-metric-item">
+            <span class="lbl">Balanço</span>
+            <span class="val" style="color: ${isEconomy ? 'var(--success)' : 'var(--danger)'};">
+              ${isEconomy ? 'Economizou ' : 'Estourou '} ${formatCurrency(Math.abs(savings))}
+            </span>
+          </div>
+        </div>
+
+        <!-- Detalhes de Mercadorias (Expansível) -->
+        <button type="button" class="historico-items-toggle" onclick="toggleHistoryDropdown('${p.id}')">
+          <span>🧾</span>
+          <span id="label-toggle-${p.id}">Ver ${items.length} ${items.length === 1 ? 'mercadoria' : 'mercadorias'}</span>
+          <span>▼</span>
+        </button>
+        <div class="historico-items-dropdown hidden" id="dropdown-${p.id}">
+          ${itemsHtml || '<p style="margin:0; font-size:0.75rem;">Nenhum item discriminado.</p>'}
+        </div>
+
+        <div class="historico-actions-bar">
+          <button type="button" class="btn btn-whatsapp-sm" onclick="shareHistoryReceipt('${p.id}')" title="Compartilhar comprovante da compra no WhatsApp">
+            📲 WhatsApp
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="handleDeleteHistoryItem('${p.id}')" style="color: var(--danger); border-color: #fca5a5;" title="Excluir este registro">
+            🗑️ Excluir
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.toggleHistoryDropdown = function(id) {
+  const drop = document.getElementById(`dropdown-${id}`);
+  if (drop) {
+    drop.classList.toggle('hidden');
+  }
+};
+
+window.shareHistoryReceipt = function(id) {
+  const p = historyCache.find(item => item.id === id);
+  if (!p) return;
+
+  const dateFormatted = `${String(p.day).padStart(2, '0')}/${String(p.month).padStart(2, '0')}/${p.year}`;
+  const items = p.items || [];
+  let msg = `🛒 *Comprovante de Compra - Compras Plus*\n`;
+  msg += `📋 *${p.listName}* (${p.category})\n`;
+  msg += `📅 Data: ${dateFormatted}\n`;
+  msg += `-----------------------------\n`;
+
+  items.forEach(it => {
+    const sub = calculateItemSubtotal(it);
+    msg += `• ${it.name}: ${it.quantity} ${it.unit || 'un'} = ${formatCurrency(sub)}\n`;
+  });
+
+  msg += `-----------------------------\n`;
+  msg += `💰 *Total Gasto:* ${formatCurrency(p.totalSpent)}\n`;
+  msg += `🎯 *Orçamento:* ${formatCurrency(p.budget)}\n`;
+  if (p.savings >= 0) {
+    msg += `🟢 *Economia:* ${formatCurrency(p.savings)}\n`;
+  } else {
+    msg += `🔴 *Estouro:* ${formatCurrency(Math.abs(p.savings))}\n`;
+  }
+  msg += `\nGerado via Lista de Compras Plus 📱`;
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+};
+
+window.handleDeleteHistoryItem = async function(id) {
+  if (confirm('Deseja realmente excluir este registro de compra do seu histórico financeiro?')) {
+    vibrateDevice(20);
+    try {
+      await db.deletePurchaseHistory(id);
+      historyCache = historyCache.filter(h => h.id !== id);
+      applyHistoryFilters();
+    } catch (err) {
+      alert('Erro ao excluir registro: ' + err.message);
+    }
+  }
+};
 
 // Inicializar aplicação
 document.addEventListener('DOMContentLoaded', async () => {

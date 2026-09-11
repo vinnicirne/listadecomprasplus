@@ -36,33 +36,37 @@ drop policy if exists "SaaS: Usuários criam suas próprias listas" on public.li
 drop policy if exists "SaaS: Usuários atualizam suas próprias listas" on public.listas;
 drop policy if exists "SaaS: Usuários excluem suas próprias listas" on public.listas;
 
--- 5. Políticas SaaS de Isolamento Estrito por Usuário
+-- 5. Políticas SaaS de Isolamento Estrito por Usuário (Autenticação Obrigatória)
+-- Remove qualquer lista órfã sem dono criada anteriormente
+delete from public.listas where user_id is null;
+
 create policy "SaaS: Usuários veem suas próprias listas" 
   on public.listas for select 
   using (
-    auth.uid() = user_id 
-    or (auth.uid() is null and user_id is null)
+    (auth.uid() is not null and auth.uid() = user_id)
+    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or exists (
+      select 1 from public.user_profiles p 
+      where p.id = auth.uid() and p.role = 'admin'
+    )
   );
 
 create policy "SaaS: Usuários criam suas próprias listas" 
   on public.listas for insert 
   with check (
-    auth.uid() = user_id 
-    or (auth.uid() is null and user_id is null)
+    auth.uid() is not null and auth.uid() = user_id
   );
 
 create policy "SaaS: Usuários atualizam suas próprias listas" 
   on public.listas for update 
   using (
-    auth.uid() = user_id 
-    or (auth.uid() is null and user_id is null)
+    auth.uid() is not null and auth.uid() = user_id
   );
 
 create policy "SaaS: Usuários excluem suas próprias listas" 
   on public.listas for delete 
   using (
-    auth.uid() = user_id 
-    or (auth.uid() is null and user_id is null)
+    auth.uid() is not null and auth.uid() = user_id
   );
 
 -- 6. Habilitar Realtime para atualizações imediatas
@@ -158,4 +162,67 @@ where lower(trim(email)) = 'viniciuscirne@gmail.com';
 update auth.users
 set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"role": "admin"}'::jsonb
 where lower(trim(email)) = 'viniciuscirne@gmail.com';
+
+-- ==========================================================
+-- 10. Tabela de Histórico de Compras (Dia, Mês, Ano e Gastos)
+-- ==========================================================
+create table if not exists public.historico_compras (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  list_id text,
+  list_name text not null,
+  category text not null,
+  budget numeric(12, 2) not null default 0.00,
+  total_spent numeric(12, 2) not null default 0.00,
+  savings numeric(12, 2) not null default 0.00,
+  items jsonb not null default '[]'::jsonb,
+  day integer not null,
+  month integer not null,
+  year integer not null,
+  purchased_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists idx_historico_user_id on public.historico_compras(user_id);
+create index if not exists idx_historico_purchased_at on public.historico_compras(purchased_at desc);
+create index if not exists idx_historico_year_month on public.historico_compras(year, month);
+
+alter table public.historico_compras enable row level security;
+
+drop policy if exists "SaaS: Usuários veem seu próprio histórico" on public.historico_compras;
+create policy "SaaS: Usuários veem seu próprio histórico" 
+  on public.historico_compras for select 
+  using (
+    (auth.uid() is not null and auth.uid() = user_id)
+    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or exists (
+      select 1 from public.user_profiles p 
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+drop policy if exists "SaaS: Usuários criam seu próprio histórico" on public.historico_compras;
+create policy "SaaS: Usuários criam seu próprio histórico" 
+  on public.historico_compras for insert 
+  with check (
+    auth.uid() is not null and auth.uid() = user_id
+  );
+
+drop policy if exists "SaaS: Usuários excluem seu próprio histórico" on public.historico_compras;
+create policy "SaaS: Usuários excluem seu próprio histórico" 
+  on public.historico_compras for delete 
+  using (
+    auth.uid() is not null and auth.uid() = user_id
+  );
+
+-- Habilitar Realtime para historico_compras
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'historico_compras'
+  ) then
+    alter publication supabase_realtime add table public.historico_compras;
+  end if;
+end $$;
+
 

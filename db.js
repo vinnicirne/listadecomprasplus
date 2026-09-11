@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'ListaComprasDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // Configuração Padrão do Supabase fornecida pelo usuário
 const DEFAULT_SUPABASE_URL = 'https://xlxuwqcszhxxzofebkjb.supabase.co';
@@ -41,6 +41,11 @@ class Database {
         }
         if (!db.objectStoreNames.contains('config')) {
           db.createObjectStore('config', { keyPath: 'key' });
+        }
+        if (!db.objectStoreNames.contains('historico')) {
+          const histStore = db.createObjectStore('historico', { keyPath: 'id' });
+          histStore.createIndex('purchasedAt', 'purchasedAt', { unique: false });
+          histStore.createIndex('userId', 'userId', { unique: false });
         }
       };
 
@@ -373,11 +378,17 @@ class Database {
 
   /**
    * Retorna todas as listas (tenta Supabase com RLS e sincroniza no IndexedDB; fallback para IndexedDB)
+   * Bloqueia completamente o acesso se o usuário não estiver autenticado.
    */
   async getLists() {
     await this.init();
 
-    // 1. Tenta buscar da nuvem (Supabase)
+    // Se o usuário não estiver autenticado, retorna lista vazia imediatamente
+    if (!this.isAuthenticated()) {
+      return [];
+    }
+
+    // 1. Tenta buscar da nuvem (Supabase com token JWT do usuário)
     if (this.supabaseUrl && this.supabaseKey) {
       try {
         const endpoint = `${this.supabaseUrl}/rest/v1/listas?select=*&order=created_at.desc`;
@@ -394,7 +405,7 @@ class Database {
           // Mapeia do schema do Supabase para o formato do app
           const mappedLists = cloudData.map(row => ({
             id: row.id,
-            userId: row.user_id || (this.user ? this.user.id : null),
+            userId: row.user_id,
             name: row.name,
             category: row.category,
             budget: Number(row.budget) || 0,
@@ -414,20 +425,21 @@ class Database {
       }
     }
 
-    // 2. Fallback: Lê do IndexedDB local
+    // 2. Fallback: Lê do IndexedDB local isolado por usuário
     return await this.getLocalLists();
   }
 
   async getLocalLists() {
+    if (!this.isAuthenticated()) {
+      return [];
+    }
     const store = await this.getStore('listas', 'readonly');
     return new Promise((resolve, reject) => {
       const request = store.getAll();
       request.onsuccess = () => {
         let lists = request.result || [];
-        if (this.user && this.user.id) {
-          // No modo autenticado, mostra listas do usuário ou criadas localmente sem userId
-          lists = lists.filter(l => !l.userId || l.userId === this.user.id);
-        }
+        // Filtra estritamente pelo ID do usuário autenticado atual
+        lists = lists.filter(l => l.userId && l.userId === this.user.id);
         lists.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         resolve(lists);
       };
@@ -437,6 +449,9 @@ class Database {
 
   async getListById(id) {
     await this.init();
+    if (!this.isAuthenticated()) {
+      return null;
+    }
     try {
       const store = await this.getStore('listas', 'readonly');
       const local = await new Promise((resolve) => {
@@ -444,7 +459,7 @@ class Database {
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => resolve(null);
       });
-      if (local) return local;
+      if (local && (!local.userId || (this.user && local.userId === this.user.id))) return local;
 
       // Se id for string numérica ou número, tenta o formato alternativo
       const altId = typeof id === 'number' ? String(id) : (!isNaN(Number(id)) ? Number(id) : null);
@@ -495,12 +510,14 @@ class Database {
   }
 
   /**
-   * Salva uma lista no IndexedDB e sincroniza no Supabase (com user_id)
+   * Salva uma lista no IndexedDB e sincroniza no Supabase (com user_id obrigatório)
    */
   async saveList(list) {
-    if (this.user && !list.userId) {
-      list.userId = this.user.id;
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado para criar ou salvar listas.');
     }
+
+    list.userId = this.user.id;
 
     // 1. Salva localmente primeiro (garantia de velocidade e persistência offline)
     await this.saveLocalList(list);
@@ -511,17 +528,13 @@ class Database {
         const endpoint = `${this.supabaseUrl}/rest/v1/listas`;
         const payload = {
           id: list.id,
+          user_id: this.user.id,
           name: list.name,
           category: list.category,
           budget: list.budget,
           items: list.items || [],
           created_at: list.createdAt
         };
-
-        // Adiciona user_id apenas se o usuário estiver logado
-        if (this.user && this.user.id) {
-          payload.user_id = this.user.id;
-        }
 
         await fetch(endpoint, {
           method: 'POST',
@@ -575,6 +588,9 @@ class Database {
    * Exclui uma lista do IndexedDB e do Supabase
    */
   async deleteList(id) {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado para excluir listas.');
+    }
     // 1. Deleta localmente
     const store = await this.getStore('listas', 'readwrite');
     await new Promise((resolve, reject) => {
@@ -670,6 +686,281 @@ class Database {
       req.onsuccess = () => resolve(true);
       req.onerror = () => reject(req.error);
     });
+  }
+
+  // ==========================================================
+  // Histórico de Compras (Gravação, Balanço por Dia, Mês e Ano)
+  // ==========================================================
+
+  /**
+   * Grava uma compra no histórico (Data, Dia, Mês, Ano e Itens)
+   */
+  async savePurchaseHistory(record) {
+    await this.init();
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado para registrar compras no histórico.');
+    }
+
+    const now = record.purchasedAt ? new Date(record.purchasedAt) : new Date();
+    const historyItem = {
+      id: record.id || ('compra_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now()),
+      userId: this.user.id,
+      listId: record.listId || null,
+      listName: record.listName || 'Compras Diversas',
+      category: record.category || 'Supermercado',
+      budget: Number(record.budget) || 0,
+      totalSpent: Number(record.totalSpent) || 0,
+      savings: Number(record.savings !== undefined ? record.savings : (Number(record.budget) - Number(record.totalSpent))) || 0,
+      items: Array.isArray(record.items) ? record.items : [],
+      day: now.getDate(),
+      month: now.getMonth() + 1, // 1 - 12
+      year: now.getFullYear(),
+      purchasedAt: now.toISOString()
+    };
+
+    // 1. Salva no IndexedDB local
+    try {
+      const store = await this.getStore('historico', 'readwrite');
+      await new Promise((resolve, reject) => {
+        const req = store.put(historyItem);
+        req.onsuccess = () => resolve(historyItem);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      console.warn('Erro ao salvar no cache local de histórico:', e);
+    }
+
+    // 2. Salva na nuvem (Supabase) com RLS
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const endpoint = `${this.supabaseUrl}/rest/v1/historico_compras`;
+        const payload = {
+          id: historyItem.id,
+          user_id: this.user.id,
+          list_id: historyItem.listId,
+          list_name: historyItem.listName,
+          category: historyItem.category,
+          budget: historyItem.budget,
+          total_spent: historyItem.totalSpent,
+          savings: historyItem.savings,
+          items: historyItem.items,
+          day: historyItem.day,
+          month: historyItem.month,
+          year: historyItem.year,
+          purchased_at: historyItem.purchasedAt
+        };
+
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        console.warn('Erro ao sincronizar compra no Supabase:', err);
+      }
+    }
+
+    return historyItem;
+  }
+
+  /**
+   * Obtém todo o histórico de compras do usuário autenticado
+   */
+  async getPurchaseHistory() {
+    await this.init();
+    if (!this.isAuthenticated()) {
+      return [];
+    }
+
+    // 1. Tenta buscar da nuvem (Supabase)
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const endpoint = `${this.supabaseUrl}/rest/v1/historico_compras?select=*&order=purchased_at.desc`;
+        const res = await fetch(endpoint, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+
+        if (res.ok) {
+          const cloudData = await res.json();
+          const mapped = cloudData.map(row => ({
+            id: row.id,
+            userId: row.user_id,
+            listId: row.list_id,
+            listName: row.list_name,
+            category: row.category,
+            budget: Number(row.budget) || 0,
+            totalSpent: Number(row.total_spent) || 0,
+            savings: Number(row.savings) || 0,
+            items: Array.isArray(row.items) ? row.items : [],
+            day: Number(row.day) || new Date(row.purchased_at).getDate(),
+            month: Number(row.month) || (new Date(row.purchased_at).getMonth() + 1),
+            year: Number(row.year) || new Date(row.purchased_at).getFullYear(),
+            purchasedAt: row.purchased_at
+          }));
+
+          // Atualiza o IndexedDB silenciosamente
+          try {
+            const store = await this.getStore('historico', 'readwrite');
+            for (const item of mapped) {
+              store.put(item);
+            }
+          } catch (_) {}
+
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Falha ao buscar histórico do Supabase, usando IndexedDB:', err);
+      }
+    }
+
+    // 2. Fallback: Lê do IndexedDB
+    try {
+      const store = await this.getStore('historico', 'readonly');
+      return new Promise((resolve) => {
+        const req = store.getAll();
+        req.onsuccess = () => {
+          let list = req.result || [];
+          list = list.filter(h => h.userId === this.user.id);
+          list.sort((a, b) => new Date(b.purchasedAt) - new Date(a.purchasedAt));
+          resolve(list);
+        };
+        req.onerror = () => resolve([]);
+      });
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /**
+   * Exclui um registro do histórico
+   */
+  async deletePurchaseHistory(id) {
+    await this.init();
+    if (!this.isAuthenticated()) {
+      throw new Error('Acesso negado');
+    }
+
+    try {
+      const store = await this.getStore('historico', 'readwrite');
+      await new Promise((res, rej) => {
+        const req = store.delete(id);
+        req.onsuccess = () => res(true);
+        req.onerror = () => rej(req.error);
+      });
+    } catch (_) {}
+
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        const endpoint = `${this.supabaseUrl}/rest/v1/historico_compras?id=eq.${encodeURIComponent(id)}`;
+        await fetch(endpoint, {
+          method: 'DELETE',
+          headers: this.getHeaders()
+        });
+      } catch (_) {}
+    }
+
+    return true;
+  }
+
+  /**
+   * Calcula o balanço financeiro detalhado por Ano, Mês e Dia
+   */
+  calculateSpendingBalance(historyList, { year, month, day } = {}) {
+    const list = historyList || [];
+    const currentYear = year ? Number(year) : (list.length > 0 ? list[0].year : new Date().getFullYear());
+    
+    // Filtra pelo Ano
+    let filtered = list.filter(item => item.year === currentYear);
+
+    // Filtra pelo Mês (se informado)
+    if (month && month !== 'all') {
+      filtered = filtered.filter(item => item.month === Number(month));
+    }
+
+    // Filtra pelo Dia (se informado)
+    if (day && day !== 'all') {
+      filtered = filtered.filter(item => item.day === Number(day));
+    }
+
+    const totalSpent = filtered.reduce((sum, i) => sum + (Number(i.totalSpent) || 0), 0);
+    const totalBudget = filtered.reduce((sum, i) => sum + (Number(i.budget) || 0), 0);
+    const totalSavings = totalBudget - totalSpent;
+    const count = filtered.length;
+    const averagePerPurchase = count > 0 ? (totalSpent / count) : 0;
+
+    // Balanço por Mês (Janeiro a Dezembro do Ano Selecionado)
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const byMonth = monthNames.map((name, idx) => {
+      const mNum = idx + 1;
+      const monthItems = list.filter(i => i.year === currentYear && i.month === mNum);
+      const spent = monthItems.reduce((s, i) => s + (Number(i.totalSpent) || 0), 0);
+      const budget = monthItems.reduce((s, i) => s + (Number(i.budget) || 0), 0);
+      return {
+        month: mNum,
+        name,
+        spent,
+        budget,
+        savings: budget - spent,
+        count: monthItems.length
+      };
+    });
+
+    // Balanço por Dia (Agrupamento por data de compra)
+    const dayMap = {};
+    filtered.forEach(item => {
+      const key = `${String(item.day).padStart(2, '0')}/${String(item.month).padStart(2, '0')}/${item.year}`;
+      if (!dayMap[key]) {
+        dayMap[key] = {
+          dateKey: key,
+          day: item.day,
+          month: item.month,
+          year: item.year,
+          spent: 0,
+          budget: 0,
+          count: 0,
+          purchases: []
+        };
+      }
+      dayMap[key].spent += Number(item.totalSpent) || 0;
+      dayMap[key].budget += Number(item.budget) || 0;
+      dayMap[key].count += 1;
+      dayMap[key].purchases.push(item);
+    });
+
+    const byDay = Object.values(dayMap).sort((a, b) => {
+      return new Date(b.year, b.month - 1, b.day) - new Date(a.year, a.month - 1, a.day);
+    });
+
+    // Balanço por Categoria
+    const catMap = {};
+    filtered.forEach(item => {
+      const cat = item.category || 'Outros';
+      if (!catMap[cat]) {
+        catMap[cat] = { category: cat, spent: 0, count: 0 };
+      }
+      catMap[cat].spent += Number(item.totalSpent) || 0;
+      catMap[cat].count += 1;
+    });
+    const byCategory = Object.values(catMap).sort((a, b) => b.spent - a.spent);
+
+    return {
+      year: currentYear,
+      month: month || 'all',
+      day: day || 'all',
+      totalSpent,
+      totalBudget,
+      totalSavings,
+      count,
+      averagePerPurchase,
+      byMonth,
+      byDay,
+      byCategory,
+      filteredPurchases: filtered
+    };
   }
 }
 

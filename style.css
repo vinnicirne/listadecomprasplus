@@ -973,6 +973,24 @@ input:focus, select:focus {
   border: 1px solid #86efac;
 }
 
+.auth-gate-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.85rem;
+  margin-bottom: 1rem;
+  color: #1e40af;
+}
+
+.auth-gate-banner strong {
+  display: block;
+  font-size: 0.84rem;
+  color: #1d4ed8;
+}
+
 /* Card de Perfil do Usuário */
 .user-profile-card {
   display: flex;
@@ -1363,5 +1381,406 @@ input:focus, select:focus {
   font-weight: 600;
   color: #059669;
 }
+
+/* ==========================================================
+   NAVEGAÇÃO PRINCIPAL POR ABAS (MINHAS LISTAS vs HISTÓRICO)
+   ========================================================== */
+
+.app-tab-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: #f1f5f9;
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.app-nav-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.app-nav-tab.active {
+  background: #ffffff;
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.app-nav-tab .nav-tab-icon {
+  font-size: 1.1rem;
+}
+
+/* Botão Finalizar Compra no Detalhe da Lista */
+.btn-finish-sm {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35rem 0.65rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+  transition: var(--transition);
+}
+
+.btn-finish-sm:active {
+  transform: scale(0.96);
+}
+
+/* ==========================================================
+   TELA: HISTÓRICO DE COMPRAS E BALANÇO FINANCEIRO
+   ========================================================== */
+
+.historico-filters-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  margin-bottom: 0.85rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.filters-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr 1fr;
+  gap: 0.5rem;
+}
+
+.filter-field label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+}
+
+.filter-field select {
+  width: 100%;
+  padding: 0.5rem 0.4rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-main);
+  outline: none;
+}
+
+.filter-field select:focus {
+  border-color: var(--primary);
+  background: #ffffff;
+}
+
+/* Grade de Balanço */
+.balanco-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.balanco-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.balanco-stat-card.primary {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #bfdbfe;
+}
+
+.balanco-stat-card.full-width {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border-left: 4px solid var(--success);
+}
+
+.balanco-stat-card.full-width.negativo {
+  border-left-color: var(--danger);
+}
+
+.balanco-card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.balanco-card-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0.25rem 0;
+  line-height: 1.2;
+}
+
+.balanco-card-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.balanco-pill-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+}
+
+.balanco-pill-badge.negativo {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+/* Seção do Gráfico Mês a Mês */
+.balanco-chart-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-header h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.65rem;
+  color: var(--text-main);
+}
+
+.month-bars-container {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0.25rem;
+  align-items: flex-end;
+  height: 95px;
+  padding-top: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.month-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.month-bar-fill {
+  width: 100%;
+  background: #93c5fd;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  min-height: 4px;
+  transition: height 0.3s ease;
+}
+
+.month-bar-fill.active {
+  background: var(--primary);
+}
+
+.month-bar-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  text-align: center;
+}
+
+/* Cards do Histórico de Compras */
+.historico-items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.historico-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.95rem;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+
+.historico-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.45rem;
+}
+
+.historico-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.historico-date-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+.historico-metrics-row {
+  display: flex;
+  justify-content: space-between;
+  background: #f8fafc;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+}
+
+.historico-metric-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.historico-metric-item .lbl {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.historico-metric-item .val {
+  font-weight: 700;
+}
+
+.historico-items-toggle {
+  background: transparent;
+  border: none;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 0.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.historico-items-dropdown {
+  margin-top: 0.45rem;
+  border-top: 1px dashed var(--border-color);
+  padding-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.historico-item-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+}
+
+.historico-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.65rem;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.5rem;
+}
+
+/* Modal Concluir Compra */
+.concluir-compra-card {
+  padding: 0.25rem 0;
+}
+
+.concluir-data-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-full);
+}
+
+.concluir-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.concluir-stat-item {
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem;
+}
+
+.concluir-stat-item.full {
+  grid-column: 1 / -1;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.concluir-stat-item.full.estouro {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.concluir-stat-item .label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.concluir-stat-item .val {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin-top: 0.2rem;
+}
+
+.btn-finish-confirm {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: var(--transition);
+}
+
+.btn-finish-confirm:active {
+  transform: scale(0.98);
+}
+
 
 
