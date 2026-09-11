@@ -4,7 +4,7 @@
  * e estratégia Network-First para atualização imediata de arquivos do app.
  */
 
-const CACHE_NAME = 'compras-plus-v4';
+const CACHE_NAME = 'compras-plus-v5';
 
 const STATIC_ASSETS = [
   './',

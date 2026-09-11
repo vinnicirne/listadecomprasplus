@@ -71,14 +71,25 @@ function escapeHtml(text) {
 // Cálculos Financeiros da Lista
 // ==========================================================
 
+function calculateItemSubtotal(item) {
+  const qtd = Number(item.quantity) || 0;
+  const preco = Number(item.unitPrice) || 0;
+  const unit = item.unit || 'un';
+
+  if (unit === 'g') {
+    // Gramas: Preço anunciado é por Quilo (ex: 300g com preço R$ 50/kg = R$ 15,00)
+    return (qtd / 1000) * preco;
+  }
+  // Para 'un', 'kg', 'L' ou outros: Quantidade * Preço Unitário
+  return qtd * preco;
+}
+
 function calculateListTotals(list) {
   const items = list.items || [];
   
-  // Total Gasto = Soma de (Qtd * Valor Unitário)
+  // Total Gasto = Soma de todos os produtos considerando suas unidades de medida
   const totalGasto = items.reduce((sum, item) => {
-    const qtd = Number(item.quantity) || 0;
-    const preco = Number(item.unitPrice) || 0;
-    return sum + (qtd * preco);
+    return sum + calculateItemSubtotal(item);
   }, 0);
 
   const orcamento = Number(list.budget) || 0;
@@ -284,8 +295,21 @@ function renderProductCards(list) {
   container.innerHTML = items.map(item => {
     const qtd = Number(item.quantity) || 0;
     const preco = Number(item.unitPrice) || 0;
-    const subtotal = qtd * preco;
+    const unit = item.unit || 'un';
+    const subtotal = calculateItemSubtotal(item);
     const catIcon = getIcon(item.category);
+
+    let unitDisplay = '';
+    if (unit === 'kg') {
+      unitDisplay = `${qtd.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} kg × ${formatCurrency(preco)}/kg`;
+    } else if (unit === 'g') {
+      const kgEq = (qtd / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+      unitDisplay = `${qtd} g (${kgEq} kg) × ${formatCurrency(preco)}/kg`;
+    } else if (unit === 'L') {
+      unitDisplay = `${qtd.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L × ${formatCurrency(preco)}/L`;
+    } else {
+      unitDisplay = `${qtd} un × ${formatCurrency(preco)}`;
+    }
 
     return `
       <div class="mobile-product-card ${item.checked ? 'item-comprado' : ''}">
@@ -302,7 +326,7 @@ function renderProductCards(list) {
             <div class="product-meta-sub">
               <span>${catIcon} ${escapeHtml(item.category)}</span>
               <span>•</span>
-              <span>${qtd} × ${formatCurrency(preco)}</span>
+              <span class="product-qty-badge">${unitDisplay}</span>
             </div>
           </div>
         </div>
@@ -441,16 +465,94 @@ async function handleCreateList(e) {
   openList(newList.id);
 }
 
+function setProductUnit(unit) {
+  const hiddenInput = document.getElementById('produto-unidade');
+  if (hiddenInput) hiddenInput.value = unit;
+
+  document.querySelectorAll('#produto-unidade-group .unit-toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.unit === unit);
+  });
+
+  const labelQtd = document.getElementById('label-produto-quantidade');
+  const labelPreco = document.getElementById('label-produto-preco');
+  const qtdInput = document.getElementById('produto-quantidade');
+  const tipEl = document.getElementById('unit-helper-tip');
+
+  if (unit === 'kg') {
+    if (labelQtd) labelQtd.textContent = 'Peso (kg) *';
+    if (labelPreco) labelPreco.textContent = 'Preço do Kg (R$) *';
+    if (qtdInput) {
+      qtdInput.step = '0.05';
+      qtdInput.min = '0.01';
+      if (!qtdInput.value || qtdInput.value === '250') qtdInput.value = '1';
+      qtdInput.placeholder = 'Ex: 1.5';
+    }
+    if (tipEl) tipEl.style.display = 'none';
+  } else if (unit === 'g') {
+    if (labelQtd) labelQtd.textContent = 'Peso (Gramas - g) *';
+    if (labelPreco) labelPreco.textContent = 'Preço do Kg no Mercado (R$) *';
+    if (qtdInput) {
+      qtdInput.step = '10';
+      qtdInput.min = '1';
+      if (!qtdInput.value || qtdInput.value === '1') qtdInput.value = '250';
+      qtdInput.placeholder = 'Ex: 300';
+    }
+    if (tipEl) tipEl.style.display = 'block';
+  } else if (unit === 'L') {
+    if (labelQtd) labelQtd.textContent = 'Volume (Litros - L) *';
+    if (labelPreco) labelPreco.textContent = 'Preço do Litro (R$) *';
+    if (qtdInput) {
+      qtdInput.step = '0.1';
+      qtdInput.min = '0.05';
+      if (!qtdInput.value || qtdInput.value === '250') qtdInput.value = '1';
+      qtdInput.placeholder = 'Ex: 1';
+    }
+    if (tipEl) tipEl.style.display = 'none';
+  } else {
+    // 'un'
+    if (labelQtd) labelQtd.textContent = 'Quantidade (un) *';
+    if (labelPreco) labelPreco.textContent = 'Valor Unit. (R$) *';
+    if (qtdInput) {
+      qtdInput.step = '1';
+      qtdInput.min = '0.01';
+      if (!qtdInput.value || qtdInput.value === '250') qtdInput.value = '1';
+      qtdInput.placeholder = 'Ex: 1';
+    }
+    if (tipEl) tipEl.style.display = 'none';
+  }
+
+  updateSubtotalPreview();
+}
+
 function updateSubtotalPreview() {
   const qtdInput = document.getElementById('produto-quantidade');
   const unitInput = document.getElementById('produto-valor-unitario');
+  const unitHidden = document.getElementById('produto-unidade');
   const preview = document.getElementById('preview-subtotal');
 
   const qtd = parseFloat(qtdInput.value) || 0;
-  const unit = parseFloat(unitInput.value) || 0;
-  const subtotal = qtd * unit;
+  const unitPrice = parseFloat(unitInput.value) || 0;
+  const unit = unitHidden ? unitHidden.value : 'un';
 
-  preview.textContent = formatCurrency(subtotal);
+  let subtotal = 0;
+  let calculationText = '';
+
+  if (unit === 'g') {
+    subtotal = (qtd / 1000) * unitPrice;
+    const kgEquivalent = (qtd / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+    calculationText = `${qtd} g (${kgEquivalent} kg) × ${formatCurrency(unitPrice)}/kg = `;
+  } else if (unit === 'kg') {
+    subtotal = qtd * unitPrice;
+    calculationText = `${qtd} kg × ${formatCurrency(unitPrice)}/kg = `;
+  } else if (unit === 'L') {
+    subtotal = qtd * unitPrice;
+    calculationText = `${qtd} L × ${formatCurrency(unitPrice)}/L = `;
+  } else {
+    subtotal = qtd * unitPrice;
+    calculationText = `${qtd} un × ${formatCurrency(unitPrice)} = `;
+  }
+
+  preview.innerHTML = `<span style="font-weight: 500; font-size: 0.8rem; color: var(--text-muted);">${calculationText}</span><strong>${formatCurrency(subtotal)}</strong>`;
 }
 
 async function handleAddProduct(e) {
@@ -461,9 +563,11 @@ async function handleAddProduct(e) {
   const catInput = document.getElementById('produto-categoria');
   const qtdInput = document.getElementById('produto-quantidade');
   const precoInput = document.getElementById('produto-valor-unitario');
+  const unitHidden = document.getElementById('produto-unidade');
 
   const name = nomeInput.value.trim();
   const category = catInput.value;
+  const unit = unitHidden ? unitHidden.value : 'un';
   const quantity = parseFloat(qtdInput.value) || 1;
   const unitPrice = parseFloat(precoInput.value) || 0;
 
@@ -477,6 +581,7 @@ async function handleAddProduct(e) {
     id: generateId(),
     name,
     category,
+    unit,
     quantity,
     unitPrice,
     checked: false
@@ -491,6 +596,7 @@ async function handleAddProduct(e) {
 
   // Limpa formulário e fecha Bottom Sheet
   document.getElementById('form-novo-produto').reset();
+  setProductUnit('un');
   document.getElementById('produto-quantidade').value = '1';
   updateSubtotalPreview();
   closeSheet('sheet-novo-produto');
@@ -614,6 +720,7 @@ function setupEventListeners() {
       document.getElementById('produto-nome').value = '';
       document.getElementById('produto-valor-unitario').value = '';
       document.getElementById('produto-quantidade').value = '1';
+      setProductUnit('un');
       updateSubtotalPreview();
       openSheet('sheet-novo-produto');
       setTimeout(() => document.getElementById('produto-nome').focus(), 150);
@@ -664,7 +771,7 @@ function setupEventListeners() {
     openSheet('modal-config-db');
   });
 
-  // Stepper de Quantidade
+  // Stepper de Quantidade Inteligente (Adaptativo por Unidade)
   const qtdInput = document.getElementById('produto-quantidade');
   const precoInput = document.getElementById('produto-valor-unitario');
   
@@ -672,17 +779,46 @@ function setupEventListeners() {
   precoInput.addEventListener('input', updateSubtotalPreview);
 
   document.getElementById('btn-qty-minus').addEventListener('click', () => {
-    let cur = parseFloat(qtdInput.value) || 1;
-    if (cur > 1) {
-      qtdInput.value = cur - 1;
-      updateSubtotalPreview();
+    let cur = parseFloat(qtdInput.value) || 0;
+    const unit = document.getElementById('produto-unidade')?.value || 'un';
+    const step = unit === 'g' ? 50 : (unit === 'kg' ? 0.25 : (unit === 'L' ? 0.5 : 1));
+    const min = unit === 'g' ? 10 : (unit === 'kg' ? 0.05 : (unit === 'L' ? 0.1 : 1));
+    
+    if (cur - step >= min) {
+      qtdInput.value = Math.round((cur - step) * 1000) / 1000;
+    } else {
+      qtdInput.value = min;
     }
+    updateSubtotalPreview();
   });
 
   document.getElementById('btn-qty-plus').addEventListener('click', () => {
     let cur = parseFloat(qtdInput.value) || 0;
-    qtdInput.value = cur + 1;
+    const unit = document.getElementById('produto-unidade')?.value || 'un';
+    const step = unit === 'g' ? 50 : (unit === 'kg' ? 0.25 : (unit === 'L' ? 0.5 : 1));
+    qtdInput.value = Math.round((cur + step) * 1000) / 1000;
     updateSubtotalPreview();
+  });
+
+  // Botões Seletores de Unidade (Unidade, Kilo, Gramas, Litro)
+  document.querySelectorAll('#produto-unidade-group .unit-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      vibrateDevice(10);
+      const unit = e.currentTarget.dataset.unit;
+      setProductUnit(unit);
+    });
+  });
+
+  // Auto-sugestão de unidade ao escolher categoria
+  document.getElementById('produto-categoria').addEventListener('change', (e) => {
+    const cat = e.target.value;
+    if (cat === 'Carnes & Aves' || cat === 'Hortifrúti') {
+      setProductUnit('kg');
+    } else if (cat === 'Laticínios & Frios') {
+      setProductUnit('g');
+    } else if (cat === 'Bebidas') {
+      setProductUnit('un');
+    }
   });
 
   // Carrossel de Chips de Categorias

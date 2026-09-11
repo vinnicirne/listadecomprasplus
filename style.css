@@ -699,6 +699,76 @@ input:focus, select:focus {
 }
 
 /* ==========================================================
+   Seletor de Unidade (Unidade, Kilo, Gramas, Litro)
+   ========================================================== */
+.unit-toggle-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  background: var(--bg-input);
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  margin-top: 0.25rem;
+}
+
+.unit-toggle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.5rem 0.25rem;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.725rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+  min-height: 52px;
+}
+
+.unit-toggle-btn span:first-child {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.unit-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+.unit-toggle-btn.active {
+  background: #ffffff;
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+.unit-tip-box {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.78rem;
+  color: #166534;
+  margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.35;
+}
+
+.product-qty-badge {
+  font-weight: 600;
+  color: var(--text-main);
+  background: #f1f5f9;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+/* ==========================================================
    Estado Vazio (Clean, Sem Mocks)
    ========================================================== */
 .empty-state-mobile {

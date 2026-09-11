@@ -24,7 +24,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- CSS Mobile-First -->
-  <link rel="stylesheet" href="style.css?v=1.0.1">
+  <link rel="stylesheet" href="style.css?v=1.0.2">
 </head>
 <body>
   <div class="mobile-app-container">
@@ -194,22 +194,51 @@
             </select>
           </div>
 
+          <!-- Tipo de Medida: Unidade, Kilo, Gramas, Litro -->
+          <div class="form-group-mobile">
+            <label>Unidade de Medida *</label>
+            <div class="unit-toggle-group" id="produto-unidade-group">
+              <button type="button" class="unit-toggle-btn active" data-unit="un">
+                <span>📦</span>
+                <span>Unidade</span>
+              </button>
+              <button type="button" class="unit-toggle-btn" data-unit="kg">
+                <span>⚖️</span>
+                <span>Kilo (kg)</span>
+              </button>
+              <button type="button" class="unit-toggle-btn" data-unit="g">
+                <span>🥩</span>
+                <span>Gramas (g)</span>
+              </button>
+              <button type="button" class="unit-toggle-btn" data-unit="L">
+                <span>🥛</span>
+                <span>Litro (L)</span>
+              </button>
+            </div>
+            <input type="hidden" id="produto-unidade" value="un">
+          </div>
+
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-            <!-- Quantidade com Stepper Grande -->
+            <!-- Quantidade / Peso com Stepper -->
             <div class="form-group-mobile">
-              <label for="produto-quantidade">Quantidade</label>
+              <label for="produto-quantidade" id="label-produto-quantidade">Quantidade (un)</label>
               <div class="mobile-stepper-row">
                 <button type="button" id="btn-qty-minus" class="mobile-step-btn">−</button>
-                <input type="number" id="produto-quantidade" min="0.01" step="any" value="1" required>
+                <input type="number" id="produto-quantidade" min="0.001" step="any" value="1" required>
                 <button type="button" id="btn-qty-plus" class="mobile-step-btn">+</button>
               </div>
             </div>
 
-            <!-- Preço Unitário -->
+            <!-- Preço Unitário / Preço por Kg -->
             <div class="form-group-mobile">
-              <label for="produto-valor-unitario">Valor Unit. (R$)</label>
+              <label for="produto-valor-unitario" id="label-produto-preco">Valor Unit. (R$)</label>
               <input type="number" id="produto-valor-unitario" min="0" step="0.01" placeholder="0,00" required>
             </div>
+          </div>
+
+          <!-- Dica Inteligente para Gramas -->
+          <div id="unit-helper-tip" class="unit-tip-box" style="display: none;">
+            💡 <strong>Cálculo Automático de Gramas:</strong> Digite o peso em gramas (ex: 300) e o preço do kg no mercado. O aplicativo calcula a proporção exata para o seu bolso!
           </div>
 
           <!-- Prévia do Subtotal do Item -->
@@ -325,7 +354,7 @@
   </div>
 
   <!-- Scripts: Banco de Dados primeiro, depois a Lógica do App -->
-  <script src="db.js?v=1.0.1"></script>
-  <script src="app.js?v=1.0.1"></script>
+  <script src="db.js?v=1.0.2"></script>
+  <script src="app.js?v=1.0.2"></script>
 </body>
 </html>
