@@ -631,6 +631,9 @@ body {
 
 input[type="text"],
 input[type="number"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
 select {
   font-family: inherit;
   font-size: 1rem; /* 16px para evitar zoom automático em navegadores iOS/Safari */
@@ -648,6 +651,40 @@ input:focus, select:focus {
   border-color: var(--border-focus);
   background: #ffffff;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Campo de Senha com Olhinho Visualizador */
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  padding-right: 48px !important;
+}
+
+.btn-toggle-password {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 48px;
+  background: transparent;
+  border: none;
+  font-size: 1.15rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+}
+
+.btn-toggle-password:active {
+  transform: scale(0.9);
 }
 
 /* Stepper de Quantidade Grande para Celular */

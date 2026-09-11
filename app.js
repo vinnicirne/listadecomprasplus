@@ -829,6 +829,15 @@ function setupEventListeners() {
   // Compartilhar no WhatsApp
   document.getElementById('btn-compartilhar-whatsapp').addEventListener('click', shareListWhatsApp);
 
+  // Máscara de Telefone e Alternador de Visibilidade de Senha (Olhinho)
+  const phoneInput = document.getElementById('signup-phone');
+  if (phoneInput) {
+    phoneInput.addEventListener('input', (e) => {
+      e.target.value = formatPhoneInput(e.target.value);
+    });
+  }
+  setupPasswordToggles();
+
   // Submissão dos Formulários do App
   document.getElementById('form-nova-lista').addEventListener('submit', handleCreateList);
   document.getElementById('form-novo-produto').addEventListener('submit', handleAddProduct);
@@ -1012,17 +1021,54 @@ function showAuthAlert(msg, type = 'error') {
   }
 }
 
+function formatPhoneInput(value) {
+  let clean = value.replace(/\D/g, '');
+  if (clean.length > 11) clean = clean.slice(0, 11);
+  if (clean.length > 10) {
+    return clean.replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3');
+  } else if (clean.length > 6) {
+    return clean.replace(/^(\d{2})(\d{4})(\d{0,4})$/, '($1) $2-$3');
+  } else if (clean.length > 2) {
+    return clean.replace(/^(\d{2})(\d{0,5})$/, '($1) $2');
+  } else if (clean.length > 0) {
+    return clean.replace(/^(\d{0,2})$/, '($1');
+  }
+  return clean;
+}
+
+function setupPasswordToggles() {
+  document.querySelectorAll('.btn-toggle-password').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = btn.dataset.target;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+        btn.title = 'Ocultar senha';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+        btn.title = 'Visualizar senha';
+      }
+    });
+  });
+}
+
 async function handleAuthLogin(e) {
   e.preventDefault();
-  const email = document.getElementById('login-email').value;
+  const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-password').value;
+  const rememberMe = document.getElementById('login-remember-me') ? document.getElementById('login-remember-me').checked : true;
   const btnSubmit = document.getElementById('btn-submit-login');
 
   btnSubmit.disabled = true;
   btnSubmit.textContent = 'Autenticando...';
 
   try {
-    await db.signIn(email, pass);
+    await db.signIn(email, pass, rememberMe);
     vibrateDevice(25);
     closeSheet('sheet-auth');
     document.getElementById('form-auth-login').reset();
@@ -1039,16 +1085,25 @@ async function handleAuthLogin(e) {
 
 async function handleAuthSignup(e) {
   e.preventDefault();
-  const name = document.getElementById('signup-name').value;
-  const email = document.getElementById('signup-email').value;
+  const name = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const phone = document.getElementById('signup-phone').value.trim();
   const pass = document.getElementById('signup-password').value;
+  const marketingConsent = document.getElementById('signup-marketing-consent') ? document.getElementById('signup-marketing-consent').checked : true;
   const btnSubmit = document.getElementById('btn-submit-signup');
+
+  const cleanPhone = phone.replace(/\D/g, '');
+  if (cleanPhone.length < 10) {
+    showAuthAlert('Por favor, digite um número de WhatsApp/Telefone válido com DDD (ex: (11) 99999-9999).', 'error');
+    document.getElementById('signup-phone').focus();
+    return;
+  }
 
   btnSubmit.disabled = true;
   btnSubmit.textContent = 'Criando conta...';
 
   try {
-    const res = await db.signUp(email, pass, name);
+    const res = await db.signUp(email, pass, name, phone, marketingConsent);
     vibrateDevice(30);
 
     if (db.isAuthenticated()) {

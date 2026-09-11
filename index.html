@@ -24,7 +24,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- CSS Mobile-First -->
-  <link rel="stylesheet" href="style.css?v=1.0.2">
+  <link rel="stylesheet" href="style.css?v=2.1.0">
 </head>
 <body>
   <div class="mobile-app-container">
@@ -398,9 +398,18 @@
           </div>
           <div class="form-group-mobile">
             <label for="login-password">Sua Senha *</label>
-            <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+            <div class="password-input-wrapper">
+              <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-password" data-target="login-password" title="Visualizar senha">
+                👁️
+              </button>
+            </div>
           </div>
-          <div style="display: flex; justify-content: flex-end; margin-bottom: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <label class="remember-me-label" style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; cursor: pointer; color: var(--text-main);">
+              <input type="checkbox" id="login-remember-me" checked style="width: 17px; height: 17px; accent-color: var(--primary); cursor: pointer;">
+              <span>Permanecer conectado</span>
+            </label>
             <button type="button" id="btn-esqueci-senha" class="btn-link-text">Esqueceu a senha?</button>
           </div>
           <button type="submit" id="btn-submit-login" class="btn btn-primary" style="width: 100%;">
@@ -411,7 +420,7 @@
         <!-- Formulário: CADASTRO -->
         <form id="form-auth-signup" class="hidden">
           <div class="form-group-mobile">
-            <label for="signup-name">Seu Nome *</label>
+            <label for="signup-name">Nome Completo *</label>
             <input type="text" id="signup-name" placeholder="Ex: Maria da Silva" required autocomplete="name">
           </div>
           <div class="form-group-mobile">
@@ -419,8 +428,26 @@
             <input type="email" id="signup-email" placeholder="seu@email.com" required autocomplete="email">
           </div>
           <div class="form-group-mobile">
+            <label for="signup-phone">WhatsApp / Telefone *</label>
+            <input type="tel" id="signup-phone" placeholder="(11) 99999-9999" required autocomplete="tel" maxlength="15">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; display: block;">
+              📲 Para receber promoções, cupons de mercado e novidades exclusivas.
+            </small>
+          </div>
+          <div class="form-group-mobile">
             <label for="signup-password">Criar Senha (mínimo 6 caracteres) *</label>
-            <input type="password" id="signup-password" minlength="6" placeholder="••••••••" required autocomplete="new-password">
+            <div class="password-input-wrapper">
+              <input type="password" id="signup-password" minlength="6" placeholder="••••••••" required autocomplete="new-password">
+              <button type="button" class="btn-toggle-password" data-target="signup-password" title="Visualizar senha">
+                👁️
+              </button>
+            </div>
+          </div>
+          <div class="form-group-mobile" style="margin-bottom: 1.15rem;">
+            <label class="remember-me-label" style="display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.75rem; color: var(--text-muted); cursor: pointer; line-height: 1.3;">
+              <input type="checkbox" id="signup-marketing-consent" checked style="width: 16px; height: 16px; accent-color: var(--primary); margin-top: 2px; cursor: pointer;">
+              <span>Concordo em receber dicas de economia, cupons e ofertas exclusivas via WhatsApp.</span>
+            </label>
           </div>
           <button type="submit" id="btn-submit-signup" class="btn btn-primary" style="width: 100%;">
             Criar Minha Conta Grátis
@@ -489,7 +516,7 @@
   </div>
 
   <!-- Scripts: Banco de Dados primeiro, depois a Lógica do App -->
-  <script src="db.js?v=2.0.0"></script>
-  <script src="app.js?v=2.0.0"></script>
+  <script src="db.js?v=2.1.0"></script>
+  <script src="app.js?v=2.1.0"></script>
 </body>
 </html>

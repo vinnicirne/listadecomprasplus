@@ -1,6 +1,7 @@
 -- ==========================================================
 -- Schema SaaS Oficial: Lista de Compras Plus
 -- Suporte Multi-inquilino com Supabase Auth & Row Level Security (RLS)
+-- Tabela de Perfis & Telefones para Marketing Futuro
 -- Execute este script no SQL Editor do seu painel Supabase
 -- ==========================================================
 
@@ -36,8 +37,6 @@ drop policy if exists "SaaS: Usuários atualizam suas próprias listas" on publi
 drop policy if exists "SaaS: Usuários excluem suas próprias listas" on public.listas;
 
 -- 5. Políticas SaaS de Isolamento Estrito por Usuário
--- Usuários autenticados têm acesso total APENAS às listas onde user_id coincide com o ID do login.
--- Listas criadas em modo visitante (sem login) têm user_id nulo e podem ser acessadas temporariamente.
 create policy "SaaS: Usuários veem suas próprias listas" 
   on public.listas for select 
   using (
@@ -76,3 +75,46 @@ begin
     alter publication supabase_realtime add table public.listas;
   end if;
 end $$;
+
+-- 7. Tabela de Perfis de Usuários (Telefone/WhatsApp para Marketing Futuro)
+create table if not exists public.user_profiles (
+  id uuid references auth.users(id) on delete cascade primary key,
+  name text,
+  email text,
+  phone text,
+  marketing_consent boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.user_profiles enable row level security;
+
+drop policy if exists "Usuários podem gerenciar seu próprio perfil" on public.user_profiles;
+create policy "Usuários podem gerenciar seu próprio perfil" 
+  on public.user_profiles for all 
+  using (auth.uid() = id) 
+  with check (auth.uid() = id);
+
+-- 8. Trigger automática: copia Nome, Telefone e E-mail para 'user_profiles' no cadastro
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.user_profiles (id, name, email, phone, marketing_consent)
+  values (
+    new.id,
+    new.raw_user_meta_data->>'name',
+    new.email,
+    new.raw_user_meta_data->>'phone',
+    coalesce((new.raw_user_meta_data->>'marketing_consent')::boolean, true)
+  )
+  on conflict (id) do update set
+    name = excluded.name,
+    phone = excluded.phone,
+    marketing_consent = excluded.marketing_consent;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert or update on auth.users
+  for each row execute procedure public.handle_new_user();

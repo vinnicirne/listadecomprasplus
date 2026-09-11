@@ -69,7 +69,7 @@ class Database {
   // Métodos de Autenticação (Supabase Auth - SaaS Multi-usuário)
   // ==========================================================
 
-  async signUp(email, password, name) {
+  async signUp(email, password, name, phone, marketingConsent = true) {
     if (!this.supabaseUrl || !this.supabaseKey) {
       throw new Error('Supabase não configurado');
     }
@@ -85,7 +85,9 @@ class Database {
         email: email.trim(),
         password: password,
         data: {
-          name: name ? name.trim() : email.split('@')[0]
+          name: name ? name.trim() : email.split('@')[0],
+          phone: phone ? phone.trim() : '',
+          marketing_consent: Boolean(marketingConsent)
         }
       })
     });
@@ -96,9 +98,9 @@ class Database {
     }
 
     if (data.session) {
-      await this.setSession(data.session);
+      await this.setSession(data.session, true);
     } else if (data.access_token) {
-      await this.setSession(data);
+      await this.setSession(data, true);
     } else if (data.user) {
       this.user = data.user;
     }
@@ -106,7 +108,7 @@ class Database {
     return data;
   }
 
-  async signIn(email, password) {
+  async signIn(email, password, rememberMe = true) {
     if (!this.supabaseUrl || !this.supabaseKey) {
       throw new Error('Supabase não configurado');
     }
@@ -129,7 +131,7 @@ class Database {
       throw new Error(data.error_description || data.msg || data.message || 'E-mail ou senha incorretos');
     }
 
-    await this.setSession(data);
+    await this.setSession(data, rememberMe);
     return data;
   }
 
@@ -146,6 +148,7 @@ class Database {
     this.accessToken = null;
     this.user = null;
     localStorage.removeItem('compras_auth_session');
+    sessionStorage.removeItem('compras_auth_session');
     try {
       await this.setConfig('auth_session', null);
     } catch (_) {}
@@ -174,7 +177,7 @@ class Database {
     return data;
   }
 
-  async setSession(sessionData) {
+  async setSession(sessionData, rememberMe = true) {
     this.accessToken = sessionData.access_token;
     this.user = sessionData.user || this.user;
 
@@ -182,19 +185,34 @@ class Database {
       access_token: this.accessToken,
       refresh_token: sessionData.refresh_token,
       user: this.user,
-      expires_at: sessionData.expires_at || (Date.now() / 1000 + (sessionData.expires_in || 3600))
+      expires_at: sessionData.expires_at || (Date.now() / 1000 + (sessionData.expires_in || 3600)),
+      remember_me: rememberMe
     };
 
-    localStorage.setItem('compras_auth_session', JSON.stringify(toStore));
-    try {
-      await this.setConfig('auth_session', toStore);
-    } catch (_) {}
+    if (rememberMe) {
+      localStorage.setItem('compras_auth_session', JSON.stringify(toStore));
+      sessionStorage.removeItem('compras_auth_session');
+      try {
+        await this.setConfig('auth_session', toStore);
+      } catch (_) {}
+    } else {
+      sessionStorage.setItem('compras_auth_session', JSON.stringify(toStore));
+      localStorage.removeItem('compras_auth_session');
+      try {
+        await this.setConfig('auth_session', null);
+      } catch (_) {}
+    }
   }
 
   async loadSession() {
     try {
-      // 1. Tenta carregar do localStorage (rápido e síncrono)
-      const cached = localStorage.getItem('compras_auth_session');
+      // 1. Tenta carregar do localStorage
+      let cached = localStorage.getItem('compras_auth_session');
+      if (!cached) {
+        // 2. Tenta carregar do sessionStorage
+        cached = sessionStorage.getItem('compras_auth_session');
+      }
+
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed && parsed.access_token) {
@@ -204,7 +222,7 @@ class Database {
         }
       }
 
-      // 2. Fallback para IndexedDB
+      // 3. Fallback para IndexedDB
       const dbSession = await this.getConfig('auth_session');
       if (dbSession && dbSession.access_token) {
         this.accessToken = dbSession.access_token;
