@@ -112,10 +112,12 @@ async function loadDataFromDb() {
   try {
     state.lists = await db.getLists();
     renderDashboard();
+    updateAuthUI();
   } catch (err) {
     console.error('Erro ao carregar dados do banco:', err);
     state.lists = [];
     renderDashboard();
+    updateAuthUI();
   }
 }
 
@@ -374,6 +376,51 @@ window.showDashboard = showDashboard;
 window.handleDeleteList = handleDeleteList;
 window.handleToggleItem = handleToggleItem;
 window.handleDeleteItem = handleDeleteItem;
+window.shareListWhatsApp = shareListWhatsApp;
+
+// ==========================================================
+// Compartilhamento via WhatsApp
+// ==========================================================
+
+function shareListWhatsApp() {
+  if (!state.activeListId) return;
+  const list = state.lists.find(l => String(l.id) === String(state.activeListId));
+  if (!list) return;
+
+  const { orcamento, totalGasto, saldoDisponivel } = calculateListTotals(list);
+  const items = list.items || [];
+
+  let msg = `🛒 *${list.name}*\n`;
+  msg += `🏷️ Categoria: ${list.category}\n`;
+  msg += `💰 Orçamento: ${formatCurrency(orcamento)} | Gasto: ${formatCurrency(totalGasto)} | Saldo: ${formatCurrency(saldoDisponivel)}\n\n`;
+  msg += `*Itens da Compra:*\n`;
+
+  if (items.length === 0) {
+    msg += `(Nenhum item cadastrado)\n`;
+  } else {
+    items.forEach(it => {
+      const check = it.checked ? '✅' : '⬜';
+      const unit = it.unit || 'un';
+      const subtotal = calculateItemSubtotal(it);
+      let unitText = '';
+      if (unit === 'kg') {
+        unitText = `${it.quantity} kg (${formatCurrency(it.unitPrice)}/kg)`;
+      } else if (unit === 'g') {
+        unitText = `${it.quantity} g (${formatCurrency(it.unitPrice)}/kg)`;
+      } else if (unit === 'L') {
+        unitText = `${it.quantity} L (${formatCurrency(it.unitPrice)}/L)`;
+      } else {
+        unitText = `${it.quantity} un (${formatCurrency(it.unitPrice)})`;
+      }
+      msg += `${check} ${it.name} - ${unitText} = ${formatCurrency(subtotal)}\n`;
+    });
+  }
+
+  msg += `\n📱 _Enviado via Compras Plus App_`;
+
+  const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+}
 
 async function handleDeleteList(listId, event) {
   if (event) event.stopPropagation();
@@ -742,6 +789,8 @@ function setupEventListeners() {
   document.getElementById('btn-fechar-sheet-lista').addEventListener('click', () => closeSheet('sheet-nova-lista'));
   document.getElementById('btn-fechar-modal-orcamento').addEventListener('click', () => closeSheet('modal-editar-orcamento'));
   document.getElementById('btn-fechar-modal-db').addEventListener('click', () => closeSheet('modal-config-db'));
+  document.getElementById('btn-fechar-sheet-auth').addEventListener('click', () => closeSheet('sheet-auth'));
+  document.getElementById('btn-fechar-sheet-perfil').addEventListener('click', () => closeSheet('sheet-perfil'));
 
   // Fechar ao clicar no backdrop escuro
   window.addEventListener('click', (e) => {
@@ -750,7 +799,37 @@ function setupEventListeners() {
     }
   });
 
-  // Submissão dos Formulários
+  // Botão Conta / Autenticação no Header
+  document.getElementById('btn-header-auth').addEventListener('click', () => {
+    vibrateDevice(15);
+    if (db.isAuthenticated()) {
+      updateAuthUI();
+      openSheet('sheet-perfil');
+    } else {
+      showAuthTab('login');
+      openSheet('sheet-auth');
+    }
+  });
+
+  // Abas de Autenticação
+  document.getElementById('tab-btn-login').addEventListener('click', () => showAuthTab('login'));
+  document.getElementById('tab-btn-signup').addEventListener('click', () => showAuthTab('signup'));
+  document.getElementById('btn-esqueci-senha').addEventListener('click', () => showAuthTab('recovery'));
+  document.getElementById('btn-voltar-login').addEventListener('click', () => showAuthTab('login'));
+
+  // Submissão dos Formulários de Autenticação
+  document.getElementById('form-auth-login').addEventListener('submit', handleAuthLogin);
+  document.getElementById('form-auth-signup').addEventListener('submit', handleAuthSignup);
+  document.getElementById('form-auth-recovery').addEventListener('submit', handleAuthRecovery);
+
+  // Ações de Perfil
+  document.getElementById('btn-logout').addEventListener('click', handleLogout);
+  document.getElementById('btn-sincronizar-nuvem').addEventListener('click', handleSyncNow);
+
+  // Compartilhar no WhatsApp
+  document.getElementById('btn-compartilhar-whatsapp').addEventListener('click', shareListWhatsApp);
+
+  // Submissão dos Formulários do App
   document.getElementById('form-nova-lista').addEventListener('submit', handleCreateList);
   document.getElementById('form-novo-produto').addEventListener('submit', handleAddProduct);
   document.getElementById('form-editar-orcamento').addEventListener('submit', handleUpdateBudget);
@@ -837,6 +916,196 @@ function setupEventListeners() {
 
   // PWA
   setupPwa();
+}
+
+// ==========================================================
+// Funções de Gestão de Autenticação e Perfil SaaS
+// ==========================================================
+
+function updateAuthUI() {
+  const btnHeader = document.getElementById('btn-header-auth');
+  const iconHeader = document.getElementById('header-auth-icon');
+  const labelHeader = document.getElementById('header-auth-label');
+
+  const user = db.getUser();
+  const isAuth = db.isAuthenticated();
+
+  if (isAuth && user) {
+    const rawName = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário';
+    const initial = rawName.charAt(0).toUpperCase();
+
+    if (btnHeader) {
+      btnHeader.classList.add('logged-in');
+      btnHeader.title = `Conectado como ${rawName}`;
+    }
+    if (iconHeader) iconHeader.textContent = '👑';
+    if (labelHeader) labelHeader.textContent = rawName.split(' ')[0];
+
+    // Atualiza dados no modal de perfil
+    const profileName = document.getElementById('profile-user-name');
+    const profileEmail = document.getElementById('profile-user-email');
+    const profileAvatar = document.getElementById('profile-avatar');
+    const statListas = document.getElementById('stat-total-listas');
+    const statItens = document.getElementById('stat-total-itens');
+
+    if (profileName) profileName.textContent = rawName;
+    if (profileEmail) profileEmail.textContent = user.email;
+    if (profileAvatar) profileAvatar.textContent = initial;
+
+    if (statListas) statListas.textContent = state.lists.length;
+    if (statItens) {
+      const totalItens = state.lists.reduce((sum, l) => sum + (l.items || []).length, 0);
+      statItens.textContent = totalItens;
+    }
+  } else {
+    if (btnHeader) {
+      btnHeader.classList.remove('logged-in');
+      btnHeader.title = 'Entrar / Criar Conta';
+    }
+    if (iconHeader) iconHeader.textContent = '👤';
+    if (labelHeader) labelHeader.textContent = 'Entrar';
+  }
+}
+
+function showAuthTab(tab) {
+  const formLogin = document.getElementById('form-auth-login');
+  const formSignup = document.getElementById('form-auth-signup');
+  const formRecovery = document.getElementById('form-auth-recovery');
+  const tabLogin = document.getElementById('tab-btn-login');
+  const tabSignup = document.getElementById('tab-btn-signup');
+  const alertBox = document.getElementById('auth-alert-msg');
+  const title = document.getElementById('auth-sheet-title');
+
+  if (alertBox) {
+    alertBox.classList.add('hidden');
+    alertBox.textContent = '';
+  }
+
+  if (tab === 'login') {
+    if (formLogin) formLogin.classList.remove('hidden');
+    if (formSignup) formSignup.classList.add('hidden');
+    if (formRecovery) formRecovery.classList.add('hidden');
+    if (tabLogin) tabLogin.classList.add('active');
+    if (tabSignup) tabSignup.classList.remove('active');
+    if (title) title.textContent = 'Entrar no Compras Plus';
+  } else if (tab === 'signup') {
+    if (formLogin) formLogin.classList.add('hidden');
+    if (formSignup) formSignup.classList.remove('hidden');
+    if (formRecovery) formRecovery.classList.add('hidden');
+    if (tabLogin) tabLogin.classList.remove('active');
+    if (tabSignup) tabSignup.classList.add('active');
+    if (title) title.textContent = 'Criar Conta Grátis';
+  } else if (tab === 'recovery') {
+    if (formLogin) formLogin.classList.add('hidden');
+    if (formSignup) formSignup.classList.add('hidden');
+    if (formRecovery) formRecovery.classList.remove('hidden');
+    if (title) title.textContent = 'Recuperar Senha';
+  }
+}
+
+function showAuthAlert(msg, type = 'error') {
+  const alertBox = document.getElementById('auth-alert-msg');
+  if (alertBox) {
+    alertBox.className = `auth-alert ${type}`;
+    alertBox.textContent = msg;
+    alertBox.classList.remove('hidden');
+  }
+}
+
+async function handleAuthLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const pass = document.getElementById('login-password').value;
+  const btnSubmit = document.getElementById('btn-submit-login');
+
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'Autenticando...';
+
+  try {
+    await db.signIn(email, pass);
+    vibrateDevice(25);
+    closeSheet('sheet-auth');
+    document.getElementById('form-auth-login').reset();
+    await db.migrateLocalListsToCloud();
+    await loadDataFromDb();
+  } catch (err) {
+    vibrateDevice(40);
+    showAuthAlert(err.message, 'error');
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Entrar no Compras Plus';
+  }
+}
+
+async function handleAuthSignup(e) {
+  e.preventDefault();
+  const name = document.getElementById('signup-name').value;
+  const email = document.getElementById('signup-email').value;
+  const pass = document.getElementById('signup-password').value;
+  const btnSubmit = document.getElementById('btn-submit-signup');
+
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'Criando conta...';
+
+  try {
+    const res = await db.signUp(email, pass, name);
+    vibrateDevice(30);
+
+    if (db.isAuthenticated()) {
+      closeSheet('sheet-auth');
+      document.getElementById('form-auth-signup').reset();
+      await db.migrateLocalListsToCloud();
+      await loadDataFromDb();
+    } else {
+      showAuthAlert('Conta criada com sucesso! Verifique seu e-mail para confirmar seu cadastro e faça login.', 'success');
+      setTimeout(() => showAuthTab('login'), 3500);
+    }
+  } catch (err) {
+    vibrateDevice(40);
+    showAuthAlert(err.message, 'error');
+  } finally {
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Criar Minha Conta Grátis';
+  }
+}
+
+async function handleAuthRecovery(e) {
+  e.preventDefault();
+  const email = document.getElementById('recovery-email').value;
+
+  try {
+    await db.resetPassword(email);
+    showAuthAlert('Instruções de recuperação enviadas para o seu e-mail!', 'success');
+  } catch (err) {
+    showAuthAlert(err.message, 'error');
+  }
+}
+
+async function handleLogout() {
+  if (confirm('Deseja realmente sair da sua conta?')) {
+    vibrateDevice(20);
+    await db.signOut();
+    closeSheet('sheet-perfil');
+    await loadDataFromDb();
+  }
+}
+
+async function handleSyncNow() {
+  const btn = document.getElementById('btn-sincronizar-nuvem');
+  btn.disabled = true;
+  btn.textContent = 'Sincronizando...';
+
+  try {
+    await db.migrateLocalListsToCloud();
+    await loadDataFromDb();
+    vibrateDevice(25);
+    alert('Listas sincronizadas com a nuvem com sucesso!');
+  } catch (err) {
+    alert('Erro ao sincronizar: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Sincronizar Listas Agora';
+  }
 }
 
 // Inicializar aplicação

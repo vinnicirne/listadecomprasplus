@@ -1,6 +1,6 @@
 /**
- * db.js - Camada de Banco de Dados Híbrida: Supabase Cloud & IndexedDB Offline
- * Conectado ao Supabase com fallback inteligente e cache offline 100% funcional.
+ * db.js - Camada de Banco de Dados SaaS: Supabase Auth, Cloud & IndexedDB Offline
+ * Suporte multi-inquilino com Row Level Security (RLS), persistência de sessão e cache offline.
  */
 
 const DB_NAME = 'ListaComprasDB';
@@ -16,12 +16,14 @@ class Database {
     this.initPromise = null;
     this.supabaseUrl = DEFAULT_SUPABASE_URL;
     this.supabaseKey = DEFAULT_SUPABASE_KEY;
+    this.accessToken = null;
+    this.user = null;
     this.isCloudOnline = false;
     this.isTableReady = false;
   }
 
   /**
-   * Inicializa o IndexedDB local
+   * Inicializa o IndexedDB local e restaura sessão do usuário
    */
   async init() {
     if (this.db) return this.db;
@@ -35,14 +37,16 @@ class Database {
         if (!db.objectStoreNames.contains('listas')) {
           const listStore = db.createObjectStore('listas', { keyPath: 'id' });
           listStore.createIndex('createdAt', 'createdAt', { unique: false });
+          listStore.createIndex('userId', 'userId', { unique: false });
         }
         if (!db.objectStoreNames.contains('config')) {
           db.createObjectStore('config', { keyPath: 'key' });
         }
       };
 
-      request.onsuccess = (event) => {
+      request.onsuccess = async (event) => {
         this.db = event.target.result;
+        await this.loadSession();
         resolve(this.db);
       };
 
@@ -62,13 +66,173 @@ class Database {
   }
 
   // ==========================================================
+  // Métodos de Autenticação (Supabase Auth - SaaS Multi-usuário)
+  // ==========================================================
+
+  async signUp(email, password, name) {
+    if (!this.supabaseUrl || !this.supabaseKey) {
+      throw new Error('Supabase não configurado');
+    }
+
+    const endpoint = `${this.supabaseUrl}/auth/v1/signup`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'apikey': this.supabaseKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        password: password,
+        data: {
+          name: name ? name.trim() : email.split('@')[0]
+        }
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error_description || data.msg || data.message || 'Erro ao criar conta no sistema');
+    }
+
+    if (data.session) {
+      await this.setSession(data.session);
+    } else if (data.access_token) {
+      await this.setSession(data);
+    } else if (data.user) {
+      this.user = data.user;
+    }
+
+    return data;
+  }
+
+  async signIn(email, password) {
+    if (!this.supabaseUrl || !this.supabaseKey) {
+      throw new Error('Supabase não configurado');
+    }
+
+    const endpoint = `${this.supabaseUrl}/auth/v1/token?grant_type=password`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'apikey': this.supabaseKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        password: password
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error_description || data.msg || data.message || 'E-mail ou senha incorretos');
+    }
+
+    await this.setSession(data);
+    return data;
+  }
+
+  async signOut() {
+    if (this.accessToken && this.supabaseUrl) {
+      try {
+        await fetch(`${this.supabaseUrl}/auth/v1/logout`, {
+          method: 'POST',
+          headers: this.getHeaders()
+        });
+      } catch (_) {}
+    }
+
+    this.accessToken = null;
+    this.user = null;
+    localStorage.removeItem('compras_auth_session');
+    try {
+      await this.setConfig('auth_session', null);
+    } catch (_) {}
+    return true;
+  }
+
+  async resetPassword(email) {
+    if (!this.supabaseUrl || !this.supabaseKey) {
+      throw new Error('Supabase não configurado');
+    }
+
+    const endpoint = `${this.supabaseUrl}/auth/v1/recover`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'apikey': this.supabaseKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email: email.trim() })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error_description || data.msg || data.message || 'Erro ao enviar recuperação de senha');
+    }
+    return data;
+  }
+
+  async setSession(sessionData) {
+    this.accessToken = sessionData.access_token;
+    this.user = sessionData.user || this.user;
+
+    const toStore = {
+      access_token: this.accessToken,
+      refresh_token: sessionData.refresh_token,
+      user: this.user,
+      expires_at: sessionData.expires_at || (Date.now() / 1000 + (sessionData.expires_in || 3600))
+    };
+
+    localStorage.setItem('compras_auth_session', JSON.stringify(toStore));
+    try {
+      await this.setConfig('auth_session', toStore);
+    } catch (_) {}
+  }
+
+  async loadSession() {
+    try {
+      // 1. Tenta carregar do localStorage (rápido e síncrono)
+      const cached = localStorage.getItem('compras_auth_session');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.access_token) {
+          this.accessToken = parsed.access_token;
+          this.user = parsed.user;
+          return parsed;
+        }
+      }
+
+      // 2. Fallback para IndexedDB
+      const dbSession = await this.getConfig('auth_session');
+      if (dbSession && dbSession.access_token) {
+        this.accessToken = dbSession.access_token;
+        this.user = dbSession.user;
+        localStorage.setItem('compras_auth_session', JSON.stringify(dbSession));
+        return dbSession;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  getUser() {
+    return this.user;
+  }
+
+  isAuthenticated() {
+    return Boolean(this.user && this.accessToken);
+  }
+
+  // ==========================================================
   // Métodos REST para Supabase Cloud
   // ==========================================================
 
   getHeaders() {
+    const authHeader = this.accessToken ? `Bearer ${this.accessToken}` : `Bearer ${this.supabaseKey}`;
     return {
       'apikey': this.supabaseKey,
-      'Authorization': `Bearer ${this.supabaseKey}`,
+      'Authorization': authHeader,
       'Content-Type': 'application/json'
     };
   }
@@ -91,7 +255,13 @@ class Database {
       if (res.ok) {
         this.isCloudOnline = true;
         this.isTableReady = true;
-        return { connected: true, tableReady: true, message: 'Conectado e sincronizado com o Supabase Cloud!' };
+        return { 
+          connected: true, 
+          tableReady: true, 
+          message: this.isAuthenticated() 
+            ? `Conectado como ${this.user?.email || 'Usuário'} (SaaS Ativo)` 
+            : 'Conectado ao Supabase Cloud!' 
+        };
       }
 
       if (res.status === 404) {
@@ -100,7 +270,7 @@ class Database {
         return { 
           connected: true, 
           tableReady: false, 
-          message: 'Supabase conectado, mas a tabela "listas" precisa ser criada via schema.sql.' 
+          message: 'Supabase conectado, mas a tabela "listas" precisa ser atualizada via schema.sql.' 
         };
       }
 
@@ -112,11 +282,11 @@ class Database {
   }
 
   // ==========================================================
-  // Operações de Listas (Híbrido: Cloud + Local)
+  // Operações de Listas (Híbrido: Cloud + Local + RLS)
   // ==========================================================
 
   /**
-   * Retorna todas as listas (tenta Supabase e sincroniza no IndexedDB; fallback para IndexedDB)
+   * Retorna todas as listas (tenta Supabase com RLS e sincroniza no IndexedDB; fallback para IndexedDB)
    */
   async getLists() {
     await this.init();
@@ -138,6 +308,7 @@ class Database {
           // Mapeia do schema do Supabase para o formato do app
           const mappedLists = cloudData.map(row => ({
             id: row.id,
+            userId: row.user_id || (this.user ? this.user.id : null),
             name: row.name,
             category: row.category,
             budget: Number(row.budget) || 0,
@@ -166,7 +337,11 @@ class Database {
     return new Promise((resolve, reject) => {
       const request = store.getAll();
       request.onsuccess = () => {
-        const lists = request.result || [];
+        let lists = request.result || [];
+        if (this.user && this.user.id) {
+          // No modo autenticado, mostra listas do usuário ou criadas localmente sem userId
+          lists = lists.filter(l => !l.userId || l.userId === this.user.id);
+        }
         lists.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         resolve(lists);
       };
@@ -199,7 +374,7 @@ class Database {
       console.warn('Erro ao consultar IndexedDB:', err);
     }
 
-    // Fallback: Busca diretamente na nuvem (Supabase)
+    // Fallback: Busca diretamente na nuvem (Supabase com token do usuário)
     if (this.supabaseUrl && this.supabaseKey) {
       try {
         const endpoint = `${this.supabaseUrl}/rest/v1/listas?id=eq.${encodeURIComponent(id)}&limit=1`;
@@ -214,6 +389,7 @@ class Database {
             const row = rows[0];
             const cloudList = {
               id: row.id,
+              userId: row.user_id || (this.user ? this.user.id : null),
               name: row.name,
               category: row.category,
               budget: Number(row.budget) || 0,
@@ -233,9 +409,13 @@ class Database {
   }
 
   /**
-   * Salva uma lista no IndexedDB e sincroniza no Supabase
+   * Salva uma lista no IndexedDB e sincroniza no Supabase (com user_id)
    */
   async saveList(list) {
+    if (this.user && !list.userId) {
+      list.userId = this.user.id;
+    }
+
     // 1. Salva localmente primeiro (garantia de velocidade e persistência offline)
     await this.saveLocalList(list);
 
@@ -251,6 +431,11 @@ class Database {
           items: list.items || [],
           created_at: list.createdAt
         };
+
+        // Adiciona user_id apenas se o usuário estiver logado
+        if (this.user && this.user.id) {
+          payload.user_id = this.user.id;
+        }
 
         await fetch(endpoint, {
           method: 'POST',
@@ -275,6 +460,29 @@ class Database {
       request.onsuccess = () => resolve(list);
       request.onerror = () => reject(request.error);
     });
+  }
+
+  /**
+   * Sincroniza listas locais criadas em modo convidado para a conta recém logada
+   */
+  async migrateLocalListsToCloud() {
+    if (!this.isAuthenticated()) return;
+    try {
+      const store = await this.getStore('listas', 'readonly');
+      const allLocal = await new Promise((res) => {
+        const req = store.getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => res([]);
+      });
+
+      const orphanLists = allLocal.filter(l => !l.userId);
+      for (const list of orphanLists) {
+        list.userId = this.user.id;
+        await this.saveList(list);
+      }
+    } catch (e) {
+      console.warn('Erro ao migrar listas locais para nuvem:', e);
+    }
   }
 
   /**

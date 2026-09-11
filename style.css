@@ -818,3 +818,248 @@ input:focus, select:focus {
     margin-bottom: 2rem;
   }
 }
+
+/* ==========================================================
+   Componentes SaaS: Autenticação, Perfil & AdMob
+   ========================================================== */
+
+/* Botão de Usuário no Header */
+.btn-user-auth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #eff6ff;
+  color: var(--primary);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-full);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 38px;
+  transition: var(--transition);
+}
+
+.btn-user-auth-badge:active {
+  transform: scale(0.95);
+  background: #dbeafe;
+}
+
+.btn-user-auth-badge.logged-in {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+/* Botão WhatsApp */
+.btn-whatsapp-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #25d366;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 32px;
+  transition: var(--transition);
+}
+
+.btn-whatsapp-sm:active {
+  background: #1ebc57;
+  transform: scale(0.95);
+}
+
+/* Abas de Autenticação (Entrar vs Cadastrar) */
+.auth-tab-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: 0.25rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--border-color);
+}
+
+.auth-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 0.65rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.auth-tab-btn.active {
+  background: #ffffff;
+  color: var(--primary);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-link-text {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-link-text:hover {
+  text-decoration: underline;
+}
+
+.auth-alert {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.825rem;
+  margin-bottom: 1rem;
+}
+
+.auth-alert.error {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid #fca5a5;
+}
+
+.auth-alert.success {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border: 1px solid #86efac;
+}
+
+/* Card de Perfil do Usuário */
+.user-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1.25rem;
+}
+
+.user-avatar-large {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.user-profile-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-profile-details h4 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.15rem;
+}
+
+.user-profile-details p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.35rem;
+}
+
+.user-badge-saas {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #065f46;
+  background: #ecfdf5;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  width: fit-content;
+}
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.profile-stat-box {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  padding: 0.85rem;
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.profile-stat-box .stat-num {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.profile-stat-box .stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.btn-danger-outline {
+  background: transparent;
+  border: 1.5px solid #fecaca;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.btn-danger-outline:active {
+  background: var(--danger-bg);
+}
+
+/* Espaço de Anúncio AdMob */
+.admob-banner-container {
+  margin-top: 1.5rem;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.admob-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #e2e8f0;
+  color: #64748b;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.45rem;
+  border-bottom-left-radius: 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.admob-inner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+

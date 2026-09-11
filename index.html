@@ -39,6 +39,11 @@
         </div>
       </div>
       <div class="header-actions">
+        <!-- Botão Conta SaaS / Perfil -->
+        <button id="btn-header-auth" class="btn btn-user-auth-badge" title="Minha Conta">
+          <span id="header-auth-icon">👤</span>
+          <span id="header-auth-label">Entrar</span>
+        </button>
         <!-- Botão Instalar App (PWA) -->
         <button id="btn-instalar-app" class="btn btn-install-badge hidden" title="Instalar aplicativo">
           📲 Instalar
@@ -71,16 +76,32 @@
           + Criar Primeira Lista
         </button>
       </div>
+
+      <!-- Espaço Reservado para Monetização AdMob -->
+      <div id="admob-banner-slot" class="admob-banner-container">
+        <div class="admob-badge">Publicidade</div>
+        <div class="admob-inner-content">
+          <span style="font-size: 1.25rem;">🛒</span>
+          <div style="font-size: 0.8rem; line-height: 1.25;">
+            <strong>Economize nas compras:</strong> Compare preços e mantenha o orçamento no verde!
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- TELA 2: DETALHE DA LISTA DE COMPRAS -->
     <main id="view-lista-detalhe" class="view hidden">
       <!-- Barra Superior de Navegação -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; gap: 0.5rem;">
         <button id="btn-voltar-dashboard" class="btn btn-secondary btn-sm">
           ← Voltar
         </button>
-        <span id="detalhe-categoria-tag" class="budget-tag">🛒 Supermercado</span>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button id="btn-compartilhar-whatsapp" class="btn btn-whatsapp-sm" title="Compartilhar lista no WhatsApp">
+            📲 WhatsApp
+          </button>
+          <span id="detalhe-categoria-tag" class="budget-tag">🛒 Supermercado</span>
+        </div>
       </div>
 
       <!-- Card do Painel Financeiro da Lista -->
@@ -351,10 +372,124 @@
       </div>
     </div>
 
+    <!-- BOTTOM SHEET: AUTENTICAÇÃO SAAS (LOGIN / CADASTRO) -->
+    <div id="sheet-auth" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3 id="auth-sheet-title">Minha Conta SaaS</h3>
+          <button id="btn-fechar-sheet-auth" class="btn btn-outline btn-sm" style="min-height: 36px;">✕</button>
+        </div>
+
+        <!-- Seletor de Abas: Entrar vs Cadastrar -->
+        <div class="auth-tab-group" id="auth-tab-group">
+          <button type="button" class="auth-tab-btn active" id="tab-btn-login">Entrar</button>
+          <button type="button" class="auth-tab-btn" id="tab-btn-signup">Criar Conta</button>
+        </div>
+
+        <!-- Alerta de Mensagem de Auth -->
+        <div id="auth-alert-msg" class="auth-alert hidden"></div>
+
+        <!-- Formulário: LOGIN -->
+        <form id="form-auth-login">
+          <div class="form-group-mobile">
+            <label for="login-email">Seu E-mail *</label>
+            <input type="email" id="login-email" placeholder="seu@email.com" required autocomplete="email">
+          </div>
+          <div class="form-group-mobile">
+            <label for="login-password">Sua Senha *</label>
+            <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 0.85rem;">
+            <button type="button" id="btn-esqueci-senha" class="btn-link-text">Esqueceu a senha?</button>
+          </div>
+          <button type="submit" id="btn-submit-login" class="btn btn-primary" style="width: 100%;">
+            Entrar no Compras Plus
+          </button>
+        </form>
+
+        <!-- Formulário: CADASTRO -->
+        <form id="form-auth-signup" class="hidden">
+          <div class="form-group-mobile">
+            <label for="signup-name">Seu Nome *</label>
+            <input type="text" id="signup-name" placeholder="Ex: Maria da Silva" required autocomplete="name">
+          </div>
+          <div class="form-group-mobile">
+            <label for="signup-email">Seu E-mail *</label>
+            <input type="email" id="signup-email" placeholder="seu@email.com" required autocomplete="email">
+          </div>
+          <div class="form-group-mobile">
+            <label for="signup-password">Criar Senha (mínimo 6 caracteres) *</label>
+            <input type="password" id="signup-password" minlength="6" placeholder="••••••••" required autocomplete="new-password">
+          </div>
+          <button type="submit" id="btn-submit-signup" class="btn btn-primary" style="width: 100%;">
+            Criar Minha Conta Grátis
+          </button>
+        </form>
+
+        <!-- Formulário: RECUPERAR SENHA -->
+        <form id="form-auth-recovery" class="hidden">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+            Digite seu e-mail cadastrado para receber um link de redefinição de senha:
+          </p>
+          <div class="form-group-mobile">
+            <label for="recovery-email">Seu E-mail *</label>
+            <input type="email" id="recovery-email" placeholder="seu@email.com" required>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            Enviar Link de Recuperação
+          </button>
+          <button type="button" id="btn-voltar-login" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">
+            ← Voltar ao Login
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- BOTTOM SHEET: PERFIL DO USUÁRIO SAAS -->
+    <div id="sheet-perfil" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>Meu Perfil</h3>
+          <button id="btn-fechar-sheet-perfil" class="btn btn-outline btn-sm" style="min-height: 36px;">✕</button>
+        </div>
+
+        <div class="user-profile-card">
+          <div class="user-avatar-large" id="profile-avatar">👤</div>
+          <div class="user-profile-details">
+            <h4 id="profile-user-name">Usuário</h4>
+            <p id="profile-user-email">email@exemplo.com</p>
+            <span class="user-badge-saas">🟢 Sincronizado na Nuvem</span>
+          </div>
+        </div>
+
+        <div class="profile-stats-grid">
+          <div class="profile-stat-box">
+            <span class="stat-num" id="stat-total-listas">0</span>
+            <span class="stat-label">Minhas Listas</span>
+          </div>
+          <div class="profile-stat-box">
+            <span class="stat-num" id="stat-total-itens">0</span>
+            <span class="stat-label">Mercadorias</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1.25rem;">
+          <button id="btn-sincronizar-nuvem" class="btn btn-outline" style="width: 100%;">
+            🔄 Sincronizar Listas Agora
+          </button>
+          <button id="btn-logout" class="btn btn-danger-outline" style="width: 100%;">
+            🚪 Sair da Conta (Logout)
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Scripts: Banco de Dados primeiro, depois a Lógica do App -->
-  <script src="db.js?v=1.0.2"></script>
-  <script src="app.js?v=1.0.2"></script>
+  <script src="db.js?v=2.0.0"></script>
+  <script src="app.js?v=2.0.0"></script>
 </body>
 </html>
