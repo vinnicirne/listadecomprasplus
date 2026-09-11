@@ -76,40 +76,71 @@ begin
   end if;
 end $$;
 
--- 7. Tabela de Perfis de Usuários (Telefone/WhatsApp para Marketing Futuro)
+-- 7. Tabela de Perfis de Usuários (Telefone/WhatsApp para Marketing Futuro & Gestão de Funções)
 create table if not exists public.user_profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   name text,
   email text,
   phone text,
   marketing_consent boolean default true,
+  role text not null default 'user',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Adiciona a coluna 'role' caso a tabela já tenha sido criada anteriormente
+alter table public.user_profiles add column if not exists role text not null default 'user';
+
 alter table public.user_profiles enable row level security;
 
+-- Política de RLS para o próprio usuário
 drop policy if exists "Usuários podem gerenciar seu próprio perfil" on public.user_profiles;
 create policy "Usuários podem gerenciar seu próprio perfil" 
   on public.user_profiles for all 
   using (auth.uid() = id) 
   with check (auth.uid() = id);
 
--- 8. Trigger automática: copia Nome, Telefone e E-mail para 'user_profiles' no cadastro
+-- Política de RLS para o Administrador visualizar todos os perfis e leads cadastrados
+drop policy if exists "Admins podem visualizar todos os perfis" on public.user_profiles;
+create policy "Admins podem visualizar todos os perfis" 
+  on public.user_profiles for select 
+  using (
+    lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or exists (
+      select 1 from public.user_profiles p 
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+-- 8. Trigger automática: copia Nome, Telefone, E-mail e define 'admin' para viniciuscirne@gmail.com
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  assigned_role text;
 begin
-  insert into public.user_profiles (id, name, email, phone, marketing_consent)
+  -- Se o e-mail for viniciuscirne@gmail.com, atribui privilégio de ADMIN automaticamente
+  if lower(trim(new.email)) = 'viniciuscirne@gmail.com' then
+    assigned_role := 'admin';
+  else
+    assigned_role := coalesce(new.raw_user_meta_data->>'role', 'user');
+  end if;
+
+  insert into public.user_profiles (id, name, email, phone, marketing_consent, role)
   values (
     new.id,
     new.raw_user_meta_data->>'name',
     new.email,
     new.raw_user_meta_data->>'phone',
-    coalesce((new.raw_user_meta_data->>'marketing_consent')::boolean, true)
+    coalesce((new.raw_user_meta_data->>'marketing_consent')::boolean, true),
+    assigned_role
   )
   on conflict (id) do update set
     name = excluded.name,
     phone = excluded.phone,
-    marketing_consent = excluded.marketing_consent;
+    marketing_consent = excluded.marketing_consent,
+    role = case 
+      when lower(trim(excluded.email)) = 'viniciuscirne@gmail.com' then 'admin' 
+      else user_profiles.role 
+    end;
   return new;
 end;
 $$ language plpgsql security definer;
@@ -118,3 +149,13 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert or update on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- 9. Elevação Imediata: Transforma viniciuscirne@gmail.com em ADMIN no banco
+update public.user_profiles
+set role = 'admin'
+where lower(trim(email)) = 'viniciuscirne@gmail.com';
+
+update auth.users
+set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"role": "admin"}'::jsonb
+where lower(trim(email)) = 'viniciuscirne@gmail.com';
+

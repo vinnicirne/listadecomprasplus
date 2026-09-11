@@ -242,6 +242,74 @@ class Database {
     return Boolean(this.user && this.accessToken);
   }
 
+  isAdmin() {
+    if (!this.user) return false;
+    const email = (this.user.email || '').toLowerCase().trim();
+    if (email === 'viniciuscirne@gmail.com') return true;
+    if (this.user.user_metadata?.role === 'admin') return true;
+    if (this.user.app_metadata?.role === 'admin') return true;
+    if (this.user.role === 'admin') return true;
+    return false;
+  }
+
+  async getAdminProfiles() {
+    if (!this.isAdmin()) {
+      throw new Error('Acesso restrito ao administrador do sistema.');
+    }
+    const endpoint = `${this.supabaseUrl}/rest/v1/user_profiles?select=*&order=created_at.desc`;
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: this.getHeaders()
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Erro ao consultar perfis e leads de usuários');
+    }
+    return await res.json();
+  }
+
+  async getAdminStats() {
+    if (!this.isAdmin()) {
+      return { totalUsers: 0, totalLists: 0, usersWithPhone: 0, profiles: [] };
+    }
+
+    try {
+      const profiles = await this.getAdminProfiles();
+      const totalUsers = profiles.length;
+      const usersWithPhone = profiles.filter(p => p.phone && p.phone.trim().length >= 10).length;
+
+      let totalLists = 0;
+      let totalBudget = 0;
+      let totalItems = 0;
+
+      try {
+        const resLists = await fetch(`${this.supabaseUrl}/rest/v1/listas?select=id,budget,items`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+        if (resLists.ok) {
+          const listsData = await resLists.json();
+          totalLists = listsData.length;
+          totalBudget = listsData.reduce((s, l) => s + (Number(l.budget) || 0), 0);
+          totalItems = listsData.reduce((s, l) => s + ((l.items || []).length), 0);
+        }
+      } catch (_) {}
+
+      return {
+        totalUsers,
+        usersWithPhone,
+        totalLists,
+        totalBudget,
+        totalItems,
+        profiles
+      };
+    } catch (err) {
+      console.warn('Erro ao obter dados administrativos:', err);
+      return { totalUsers: 0, totalLists: 0, usersWithPhone: 0, profiles: [] };
+    }
+  }
+
   // ==========================================================
   // Métodos REST para Supabase Cloud
   // ==========================================================

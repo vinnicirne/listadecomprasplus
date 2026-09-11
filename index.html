@@ -502,6 +502,19 @@
           </div>
         </div>
 
+        <!-- Seção Exclusiva de Administrador -->
+        <div id="admin-perfil-section" class="admin-perfil-section hidden">
+          <div class="admin-perfil-header">
+            <span class="admin-badge-shield">🛡️ ADMINISTRADOR MASTER</span>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.25rem 0 0.6rem;">
+            Acesso liberado a métricas globais e base de leads de WhatsApp capturados.
+          </p>
+          <button id="btn-abrir-painel-admin" class="btn btn-admin-primary" style="width: 100%;">
+            📊 Acessar Painel de Leads & Métricas
+          </button>
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1.25rem;">
           <button id="btn-sincronizar-nuvem" class="btn btn-outline" style="width: 100%;">
             🔄 Sincronizar Listas Agora
@@ -513,10 +526,74 @@
       </div>
     </div>
 
+    <!-- BOTTOM SHEET: PAINEL ADMINISTRATIVO (LEADS DE MARKETING & MÉTRICAS) -->
+    <div id="sheet-admin" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content" style="max-height: 92vh; display: flex; flex-direction: column;">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header" style="padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.45rem;">
+              <span style="font-size: 1.25rem;">🛡️</span>
+              <h3 style="margin: 0; font-size: 1.15rem;">Painel do Administrador</h3>
+            </div>
+            <small style="color: var(--text-muted); font-size: 0.72rem;">Gestão SaaS: viniciuscirne@gmail.com</small>
+          </div>
+          <button id="btn-fechar-sheet-admin" class="btn btn-outline btn-sm" style="min-height: 36px;">✕</button>
+        </div>
+
+        <!-- Métricas Rápidas -->
+        <div class="admin-metrics-grid">
+          <div class="admin-metric-card">
+            <span class="admin-metric-val" id="admin-stat-users">0</span>
+            <span class="admin-metric-lbl">👥 Leads Totais</span>
+          </div>
+          <div class="admin-metric-card">
+            <span class="admin-metric-val" id="admin-stat-phones">0</span>
+            <span class="admin-metric-lbl">📲 Com WhatsApp</span>
+          </div>
+          <div class="admin-metric-card">
+            <span class="admin-metric-val" id="admin-stat-lists">0</span>
+            <span class="admin-metric-lbl">🛒 Listas SaaS</span>
+          </div>
+        </div>
+
+        <!-- Barra de Ações: Exportar CSV + Atualizar -->
+        <div class="admin-toolbar">
+          <button type="button" id="btn-exportar-csv" class="btn-admin-action-green">
+            <span>📥</span>
+            <span>Baixar Leads (.CSV)</span>
+          </button>
+          <button type="button" id="btn-recarregar-admin" class="btn btn-outline btn-sm" style="min-height: 38px;">
+            🔄 Atualizar
+          </button>
+        </div>
+
+        <!-- Campo de Busca de Leads -->
+        <div class="admin-search-wrapper">
+          <input type="text" id="admin-search-leads" placeholder="🔍 Buscar por nome, e-mail ou WhatsApp..." autocomplete="off">
+        </div>
+
+        <!-- Container Rolável de Leads -->
+        <div class="admin-leads-scroll-area">
+          <div id="admin-leads-loading" class="admin-leads-loading">
+            <div class="admin-spinner"></div>
+            <span>Carregando leads do Supabase...</span>
+          </div>
+          <div id="admin-leads-container" class="admin-leads-container hidden">
+            <!-- Cards de leads injetados via JS -->
+          </div>
+          <div id="admin-leads-empty" class="empty-state-mobile hidden" style="padding: 1.5rem 0.5rem;">
+            <p style="font-size: 0.9rem; color: var(--text-muted);">Nenhum lead encontrado com este filtro.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
   </div>
 
   <!-- Scripts: Banco de Dados primeiro, depois a Lógica do App -->
-  <script src="db.js?v=2.1.0"></script>
-  <script src="app.js?v=2.1.0"></script>
+  <script src="db.js?v=2.2.0"></script>
+  <script src="app.js?v=2.2.0"></script>
 </body>
 </html>

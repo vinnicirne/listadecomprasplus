@@ -791,6 +791,11 @@ function setupEventListeners() {
   document.getElementById('btn-fechar-modal-db').addEventListener('click', () => closeSheet('modal-config-db'));
   document.getElementById('btn-fechar-sheet-auth').addEventListener('click', () => closeSheet('sheet-auth'));
   document.getElementById('btn-fechar-sheet-perfil').addEventListener('click', () => closeSheet('sheet-perfil'));
+  
+  const btnFecharAdmin = document.getElementById('btn-fechar-sheet-admin');
+  if (btnFecharAdmin) {
+    btnFecharAdmin.addEventListener('click', () => closeSheet('sheet-admin'));
+  }
 
   // Fechar ao clicar no backdrop escuro
   window.addEventListener('click', (e) => {
@@ -811,11 +816,40 @@ function setupEventListeners() {
     }
   });
 
+  // Botão Abrir Painel Admin (dentro de Meu Perfil)
+  const btnAbrirAdmin = document.getElementById('btn-abrir-painel-admin');
+  if (btnAbrirAdmin) {
+    btnAbrirAdmin.addEventListener('click', () => {
+      vibrateDevice(15);
+      closeSheet('sheet-perfil');
+      openAdminPanel();
+    });
+  }
+
+  // Ações do Painel Admin
+  const btnRecarregarAdmin = document.getElementById('btn-recarregar-admin');
+  if (btnRecarregarAdmin) {
+    btnRecarregarAdmin.addEventListener('click', loadAdminData);
+  }
+
+  const btnExportarCsv = document.getElementById('btn-exportar-csv');
+  if (btnExportarCsv) {
+    btnExportarCsv.addEventListener('click', exportLeadsToCsv);
+  }
+
+  const searchAdminInput = document.getElementById('admin-search-leads');
+  if (searchAdminInput) {
+    searchAdminInput.addEventListener('input', (e) => {
+      filterAdminLeads(e.target.value);
+    });
+  }
+
   // Abas de Autenticação
   document.getElementById('tab-btn-login').addEventListener('click', () => showAuthTab('login'));
   document.getElementById('tab-btn-signup').addEventListener('click', () => showAuthTab('signup'));
   document.getElementById('btn-esqueci-senha').addEventListener('click', () => showAuthTab('recovery'));
   document.getElementById('btn-voltar-login').addEventListener('click', () => showAuthTab('login'));
+
 
   // Submissão dos Formulários de Autenticação
   document.getElementById('form-auth-login').addEventListener('submit', handleAuthLogin);
@@ -938,6 +972,17 @@ function updateAuthUI() {
 
   const user = db.getUser();
   const isAuth = db.isAuthenticated();
+  const isAdmin = db.isAdmin();
+
+  // Controla exibição da seção exclusiva do Administrador no Perfil
+  const adminSection = document.getElementById('admin-perfil-section');
+  if (adminSection) {
+    if (isAdmin) {
+      adminSection.classList.remove('hidden');
+    } else {
+      adminSection.classList.add('hidden');
+    }
+  }
 
   if (isAuth && user) {
     const rawName = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário';
@@ -945,10 +990,10 @@ function updateAuthUI() {
 
     if (btnHeader) {
       btnHeader.classList.add('logged-in');
-      btnHeader.title = `Conectado como ${rawName}`;
+      btnHeader.title = isAdmin ? `🛡️ Administrador Master (${rawName})` : `Conectado como ${rawName}`;
     }
-    if (iconHeader) iconHeader.textContent = '👑';
-    if (labelHeader) labelHeader.textContent = rawName.split(' ')[0];
+    if (iconHeader) iconHeader.textContent = isAdmin ? '🛡️' : '👑';
+    if (labelHeader) labelHeader.textContent = isAdmin ? 'Admin' : rawName.split(' ')[0];
 
     // Atualiza dados no modal de perfil
     const profileName = document.getElementById('profile-user-name');
@@ -957,9 +1002,13 @@ function updateAuthUI() {
     const statListas = document.getElementById('stat-total-listas');
     const statItens = document.getElementById('stat-total-itens');
 
-    if (profileName) profileName.textContent = rawName;
+    if (profileName) {
+      profileName.innerHTML = isAdmin 
+        ? `${escapeHtml(rawName)} <span style="font-size:0.72rem; color:#d97706; font-weight:800; background:#fef3c7; border:1px solid #fde68a; padding:0.12rem 0.45rem; border-radius:12px; margin-left:5px;">🛡️ Admin</span>` 
+        : escapeHtml(rawName);
+    }
     if (profileEmail) profileEmail.textContent = user.email;
-    if (profileAvatar) profileAvatar.textContent = initial;
+    if (profileAvatar) profileAvatar.textContent = isAdmin ? '🛡️' : initial;
 
     if (statListas) statListas.textContent = state.lists.length;
     if (statItens) {
@@ -1163,8 +1212,180 @@ async function handleSyncNow() {
   }
 }
 
+// ==========================================================
+// Painel Administrativo & Gestão de Leads SaaS
+// ==========================================================
+
+let adminLeadsCache = [];
+
+async function openAdminPanel() {
+  openSheet('sheet-admin');
+  await loadAdminData();
+}
+
+async function loadAdminData() {
+  const loading = document.getElementById('admin-leads-loading');
+  const container = document.getElementById('admin-leads-container');
+  const empty = document.getElementById('admin-leads-empty');
+  const statUsers = document.getElementById('admin-stat-users');
+  const statPhones = document.getElementById('admin-stat-phones');
+  const statLists = document.getElementById('admin-stat-lists');
+
+  if (loading) loading.classList.remove('hidden');
+  if (container) container.classList.add('hidden');
+  if (empty) empty.classList.add('hidden');
+
+  try {
+    const stats = await db.getAdminStats();
+    if (statUsers) statUsers.textContent = stats.totalUsers || 0;
+    if (statPhones) statPhones.textContent = stats.usersWithPhone || 0;
+    if (statLists) statLists.textContent = stats.totalLists || 0;
+
+    adminLeadsCache = stats.profiles || [];
+    renderAdminLeads(adminLeadsCache);
+  } catch (err) {
+    if (loading) loading.classList.add('hidden');
+    alert('Erro ao carregar dados do painel admin: ' + err.message);
+  }
+}
+
+function renderAdminLeads(leads) {
+  const loading = document.getElementById('admin-leads-loading');
+  const container = document.getElementById('admin-leads-container');
+  const empty = document.getElementById('admin-leads-empty');
+
+  if (loading) loading.classList.add('hidden');
+
+  if (!leads || leads.length === 0) {
+    if (container) container.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+
+  if (empty) empty.classList.add('hidden');
+  if (container) {
+    container.classList.remove('hidden');
+    container.innerHTML = leads.map(lead => {
+      const name = lead.name || 'Sem nome';
+      const email = lead.email || 'Sem e-mail';
+      const phone = lead.phone ? formatPhoneInput(lead.phone) : 'Não informado';
+      const isAdmin = (lead.role === 'admin') || (email.toLowerCase() === 'viniciuscirne@gmail.com');
+      const badgeClass = isAdmin ? 'badge-admin' : 'badge-user';
+      const badgeLabel = isAdmin ? '👑 Admin' : '👤 Lead';
+      
+      const rawDate = lead.created_at ? new Date(lead.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Data n/d';
+      
+      let waButton = '';
+      if (lead.phone && lead.phone.replace(/\D/g, '').length >= 10) {
+        let cleanDigits = lead.phone.replace(/\D/g, '');
+        if (cleanDigits.length === 10 || cleanDigits.length === 11) {
+          cleanDigits = '55' + cleanDigits;
+        }
+        const textMsg = encodeURIComponent(`Olá ${name}, tudo bem? Sou da equipe do Lista de Compras Plus!`);
+        waButton = `
+          <a href="https://wa.me/${cleanDigits}?text=${textMsg}" target="_blank" rel="noopener" class="btn-lead-whatsapp">
+            <span>💬</span> Conversar no WhatsApp
+          </a>
+        `;
+      } else {
+        waButton = `<span style="font-size: 0.72rem; color: var(--text-light);">Sem WhatsApp cadastrado</span>`;
+      }
+
+      return `
+        <div class="admin-lead-card ${isAdmin ? 'is-admin' : ''}">
+          <div class="admin-lead-header">
+            <span class="admin-lead-name">${escapeHtml(name)}</span>
+            <span class="admin-lead-badge ${badgeClass}">${badgeLabel}</span>
+          </div>
+          <div class="admin-lead-details">
+            <div class="admin-lead-row">
+              <span>📧</span>
+              <span>${escapeHtml(email)}</span>
+            </div>
+            <div class="admin-lead-row">
+              <span>📲</span>
+              <strong>${escapeHtml(phone)}</strong>
+            </div>
+            <div class="admin-lead-row" style="justify-content: space-between; margin-top: 2px;">
+              <span style="font-size: 0.7rem; color: var(--text-light);">📅 ${rawDate}</span>
+              ${lead.marketing_consent !== false ? '<span class="admin-lead-consent-tag">✅ Aceita Marketing</span>' : '<span style="font-size:0.68rem; color:#ef4444;">❌ Não aceitou</span>'}
+            </div>
+          </div>
+          <div class="admin-lead-actions">
+            ${waButton}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function filterAdminLeads(searchTerm) {
+  const term = (searchTerm || '').toLowerCase().trim();
+  if (!term) {
+    renderAdminLeads(adminLeadsCache);
+    return;
+  }
+
+  const filtered = adminLeadsCache.filter(lead => {
+    const name = (lead.name || '').toLowerCase();
+    const email = (lead.email || '').toLowerCase();
+    const phone = (lead.phone || '').replace(/\D/g, '');
+    const cleanTerm = term.replace(/\D/g, '');
+
+    return name.includes(term) || email.includes(term) || (cleanTerm && phone.includes(cleanTerm));
+  });
+
+  renderAdminLeads(filtered);
+}
+
+function exportLeadsToCsv() {
+  if (!adminLeadsCache || adminLeadsCache.length === 0) {
+    alert('Nenhum lead disponível para exportação no momento.');
+    return;
+  }
+
+  // Cabeçalho do CSV
+  const headers = ['Nome', 'Email', 'Telefone', 'WhatsApp_Link', 'Marketing_Consent', 'Funcao', 'Data_Cadastro'];
+  
+  const rows = adminLeadsCache.map(lead => {
+    const name = `"${(lead.name || '').replace(/"/g, '""')}"`;
+    const email = `"${(lead.email || '').replace(/"/g, '""')}"`;
+    const phone = `"${(lead.phone || '').replace(/"/g, '""')}"`;
+    
+    let waLink = '';
+    if (lead.phone && lead.phone.replace(/\D/g, '').length >= 10) {
+      let digits = lead.phone.replace(/\D/g, '');
+      if (digits.length === 10 || digits.length === 11) digits = '55' + digits;
+      waLink = `"https://wa.me/${digits}"`;
+    }
+
+    const consent = lead.marketing_consent !== false ? '"SIM"' : '"NAO"';
+    const role = `"${lead.role || 'user'}"`;
+    const date = `"${lead.created_at || ''}"`;
+
+    return [name, email, phone, waLink, consent, role, date].join(';');
+  });
+
+  // BOM UTF-8 (\uFEFF) para garantir acentuação correta no Excel brasileiro
+  const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `leads_compras_plus_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  vibrateDevice(20);
+}
+
 // Inicializar aplicação
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await loadDataFromDb();
 });
+
