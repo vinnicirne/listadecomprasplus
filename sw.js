@@ -4,13 +4,14 @@
  * e estratégia Network-First para atualização imediata de arquivos do app.
  */
 
-const CACHE_NAME = 'compras-plus-v9';
+const CACHE_NAME = 'compras-plus-v10';
 
 const STATIC_ASSETS = [
   './',
   './index.html',
   './style.css',
   './db.js',
+  './admob.js',
   './app.js',
   './manifest.json',
   './icons/favicon.png',

@@ -1552,6 +1552,9 @@ function switchAppTab(tabName) {
     }
 
     if (fab) fab.classList.remove('hidden');
+    if (window.admobManager && typeof window.admobManager.renderWebBanner === 'function') {
+      window.admobManager.renderWebBanner();
+    }
   } else if (tabName === 'historico') {
     if (tabListas) tabListas.classList.remove('active');
     if (tabHist) tabHist.classList.add('active');
@@ -1561,6 +1564,9 @@ function switchAppTab(tabName) {
 
     if (fab) fab.classList.add('hidden');
     loadAndRenderHistory();
+    if (window.admobManager && typeof window.admobManager.renderNativeAd === 'function') {
+      window.admobManager.renderNativeAd('admob-native-slot');
+    }
   }
 }
 
@@ -1639,8 +1645,14 @@ async function handleConfirmarFinalizarCompra() {
     closeSheet('sheet-concluir-compra');
     alert(`🎉 Compra finalizada com sucesso!\nTotal Gasto: ${formatCurrency(totalGasto)}\nData: ${new Date().toLocaleDateString('pt-BR')}`);
 
-    // Alterna para a tela de Histórico & Balanço para ver o resultado
-    switchAppTab('historico');
+    // Exibe anúncio Intersticial AdMob ao concluir a compra
+    if (window.admobManager && typeof window.admobManager.showInterstitial === 'function') {
+      window.admobManager.showInterstitial(() => {
+        switchAppTab('historico');
+      });
+    } else {
+      switchAppTab('historico');
+    }
   } catch (err) {
     alert('Erro ao gravar compra no histórico: ' + err.message);
   } finally {

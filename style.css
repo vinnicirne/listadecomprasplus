@@ -1118,6 +1118,92 @@ input:focus, select:focus {
   color: var(--text-muted);
 }
 
+/* Anúncio Nativo Avançado */
+.admob-native-container {
+  margin: 1rem 0;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Overlay Tela Cheia (Intersticial e Abertura do App) */
+.admob-fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: fadeIn 0.25s ease;
+}
+
+.admob-fullscreen-overlay.fade-out {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.admob-overlay-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.admob-overlay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.btn-ad-close {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-full);
+  cursor: not-allowed;
+  transition: var(--transition);
+}
+
+.btn-ad-close.active {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.admob-ad-preview-box {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.admob-overlay-footer {
+  margin-top: 1rem;
+  text-align: center;
+}
+
 /* ==========================================================
    PAINEL DO ADMINISTRADOR (SAAS ADMIN & CRM DE LEADS)
    ========================================================== */

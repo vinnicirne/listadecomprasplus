@@ -294,6 +294,20 @@
           <!-- Injetado dinamicamente via JS -->
         </div>
 
+        <!-- Bloco de Anúncio Nativo Avançado AdMob -->
+        <div id="admob-native-slot" class="admob-native-container">
+          <div class="admob-badge">Anúncio • Nativo</div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.5rem;">💳</span>
+            <div>
+              <strong style="font-size: 0.85rem; color: var(--text-main);">Cartão de Crédito com Cashback</strong>
+              <p style="margin: 0.15rem 0 0; font-size: 0.72rem; color: var(--text-muted);">
+                Economize até 5% em todos os supermercados e açougues credenciados.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- Estado Vazio do Histórico -->
         <div id="empty-state-historico" class="empty-state-mobile hidden" style="padding: 2.5rem 1rem;">
           <div class="empty-state-icon">📜</div>
@@ -775,8 +789,9 @@
 
   </div>
 
-  <!-- Scripts: Banco de Dados primeiro, depois a Lógica do App -->
-  <script src="db.js?v=2.3.0"></script>
-  <script src="app.js?v=2.3.0"></script>
+  <!-- Scripts: Banco de Dados, AdMob Monetização e Lógica do App -->
+  <script src="db.js?v=2.4.0"></script>
+  <script src="admob.js?v=2.4.0"></script>
+  <script src="app.js?v=2.4.0"></script>
 </body>
 </html>
