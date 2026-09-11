@@ -166,24 +166,26 @@ async function loadDataFromDb() {
 }
 
 function lockAppWithAuthGate() {
-  const btnCloseAuth = document.getElementById('btn-fechar-sheet-auth');
-  const banner = document.getElementById('auth-gate-banner');
+  const initialView = document.getElementById('view-login-inicial');
+  const mainShell = document.getElementById('main-app-shell');
+  const fab = document.getElementById('fab-action-btn');
 
-  if (btnCloseAuth) btnCloseAuth.classList.add('hidden');
-  if (banner) banner.classList.remove('hidden');
+  if (initialView) initialView.classList.remove('hidden');
+  if (mainShell) mainShell.classList.add('hidden');
+  if (fab) fab.classList.add('hidden');
 
-  showAuthTab('login');
-  openSheet('sheet-auth');
+  closeAllSheets();
+  showInitialAuthTab('login');
 }
 
 function unlockAppFromAuthGate() {
-  const btnCloseAuth = document.getElementById('btn-fechar-sheet-auth');
-  const banner = document.getElementById('auth-gate-banner');
+  const initialView = document.getElementById('view-login-inicial');
+  const mainShell = document.getElementById('main-app-shell');
 
-  if (btnCloseAuth) btnCloseAuth.classList.remove('hidden');
-  if (banner) banner.classList.add('hidden');
+  if (initialView) initialView.classList.add('hidden');
+  if (mainShell) mainShell.classList.remove('hidden');
 
-  closeSheet('sheet-auth');
+  closeAllSheets();
 }
 
 // ==========================================================
@@ -226,40 +228,57 @@ function renderDashboard() {
     const icon = getIcon(list.category);
     const qtdItens = (list.items || []).length;
 
-    return `
-      <div class="card-lista-item" onclick="openList('${list.id}', event)">
-        <div class="card-lista-header">
-          <div>
-            <h3 class="card-lista-title">${escapeHtml(list.name)}</h3>
-            <span class="budget-tag" style="margin-top: 0.25rem;">${icon} ${escapeHtml(list.category)}</span>
+      const isOwner = !list.isShared;
+      let badgeShared = '';
+      if (list.isShared) {
+        if (list.permission === 'aberto') {
+          badgeShared = '<span class="badge-shared-tag tag-aberto">🟢 Compartilhada (Modo Aberto)</span>';
+        } else {
+          badgeShared = '<span class="badge-shared-tag tag-fechado">🔒 Compartilhada (Apenas Leitura)</span>';
+        }
+      } else {
+        badgeShared = '<span class="badge-shared-tag tag-owner">👑 Minha Lista</span>';
+      }
+
+      return `
+        <div class="card-lista-item" onclick="openList('${list.id}', event)">
+          <div class="card-lista-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem;">
+                ${badgeShared}
+              </div>
+              <h3 class="card-lista-title">${escapeHtml(list.name)}</h3>
+              <span class="budget-tag" style="margin-top: 0.25rem;">${icon} ${escapeHtml(list.category)}</span>
+            </div>
+            ${isOwner ? `
+              <button class="btn-trash" title="Excluir Lista" onclick="handleDeleteList('${list.id}', event)">
+                🗑️
+              </button>
+            ` : ''}
           </div>
-          <button class="btn-trash" title="Excluir Lista" onclick="handleDeleteList('${list.id}', event)">
-            🗑️
+
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-top: 0.5rem;">
+            <span>Orçamento: <strong>${formatCurrency(orcamento)}</strong></span>
+            <span>Gasto: <strong style="color: var(--primary);">${formatCurrency(totalGasto)}</strong></span>
+          </div>
+
+          <div class="progress-container" style="margin: 0.5rem 0;">
+            <div class="progress-fill ${progClass}" style="width: ${progressWidth}%;"></div>
+          </div>
+
+          <div class="card-lista-footer">
+            <span>${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'} (${Math.round(percentualConsumido)}%)</span>
+            <span style="font-weight: 700; color: ${saldoColor}">
+              Saldo: ${formatCurrency(saldoDisponivel)} (${saldoStatus})
+            </span>
+          </div>
+
+          <button class="btn btn-primary btn-sm" style="width: 100%; margin-top: 0.75rem; min-height: 42px; font-size: 0.9rem;" onclick="openList('${list.id}', event)">
+            Abrir Lista & Itens →
           </button>
         </div>
-
-        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-top: 0.5rem;">
-          <span>Orçamento: <strong>${formatCurrency(orcamento)}</strong></span>
-          <span>Gasto: <strong style="color: var(--primary);">${formatCurrency(totalGasto)}</strong></span>
-        </div>
-
-        <div class="progress-container" style="margin: 0.5rem 0;">
-          <div class="progress-fill ${progClass}" style="width: ${progressWidth}%;"></div>
-        </div>
-
-        <div class="card-lista-footer">
-          <span>${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'} (${Math.round(percentualConsumido)}%)</span>
-          <span style="font-weight: 700; color: ${saldoColor}">
-            Saldo: ${formatCurrency(saldoDisponivel)} (${saldoStatus})
-          </span>
-        </div>
-
-        <button class="btn btn-primary btn-sm" style="width: 100%; margin-top: 0.75rem; min-height: 42px; font-size: 0.9rem;" onclick="openList('${list.id}', event)">
-          Abrir Lista & Itens →
-        </button>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('');
 }
 
 // ==========================================================
@@ -284,6 +303,46 @@ async function renderListDetail(listId) {
   }
 
   state.activeListId = String(list.id);
+
+  // Permissão da Lista
+  const perm = db.getListPermission(list);
+  const sharedBanner = document.getElementById('detalhe-shared-banner');
+  const sharedText = document.getElementById('shared-banner-text');
+  const sharedIcon = document.getElementById('shared-banner-icon');
+  const btnEditarOrcamento = document.getElementById('btn-editar-orcamento');
+  const btnAbrirConcluir = document.getElementById('btn-abrir-finalizar-compra');
+  const fab = document.getElementById('fab-action-btn');
+
+  if (perm === 'fechado') {
+    if (sharedBanner) {
+      sharedBanner.className = 'shared-mode-banner';
+      sharedBanner.classList.remove('hidden');
+    }
+    if (sharedIcon) sharedIcon.textContent = '🔒';
+    if (sharedText) sharedText.textContent = 'Modo Fechado: Somente Leitura. Você pode acompanhar a lista em tempo real, mas a adição e edição de mercadorias está bloqueada pelo dono.';
+    if (btnEditarOrcamento) btnEditarOrcamento.classList.add('hidden');
+    if (btnAbrirConcluir) btnAbrirConcluir.classList.add('hidden');
+    if (fab) fab.classList.add('hidden');
+  } else if (perm === 'aberto') {
+    if (sharedBanner) {
+      sharedBanner.className = 'shared-mode-banner';
+      sharedBanner.style.background = '#f0fdf4';
+      sharedBanner.style.borderColor = '#bbf7d0';
+      sharedBanner.style.color = '#166534';
+      sharedBanner.classList.remove('hidden');
+    }
+    if (sharedIcon) sharedIcon.textContent = '🟢';
+    if (sharedText) sharedText.textContent = 'Modo Aberto: Você é colaborador desta lista e pode adicionar produtos e marcar compras.';
+    if (btnEditarOrcamento) btnEditarOrcamento.classList.remove('hidden');
+    if (btnAbrirConcluir) btnAbrirConcluir.classList.remove('hidden');
+    if (fab) fab.classList.remove('hidden');
+  } else {
+    // Dono
+    if (sharedBanner) sharedBanner.classList.add('hidden');
+    if (btnEditarOrcamento) btnEditarOrcamento.classList.remove('hidden');
+    if (btnAbrirConcluir) btnAbrirConcluir.classList.remove('hidden');
+    if (fab) fab.classList.remove('hidden');
+  }
 
   // Atualizar cabeçalho da lista
   document.getElementById('detalhe-nome-lista').textContent = list.name;
@@ -343,6 +402,8 @@ function renderProductCards(list) {
   const badgeContador = document.getElementById('itens-contador');
 
   let items = list.items || [];
+  const perm = db.getListPermission(list);
+  const isReadOnly = perm === 'fechado';
 
   // Filtrar por categoria se houver filtro selecionado
   if (state.filterCategory && state.filterCategory !== 'TODAS') {
@@ -385,8 +446,9 @@ function renderProductCards(list) {
             type="checkbox" 
             class="mobile-checkbox" 
             ${item.checked ? 'checked' : ''} 
+            ${isReadOnly ? 'disabled' : ''}
             onchange="handleToggleItem('${list.id}', '${item.id}', this.checked)"
-            title="Marcar como comprado"
+            title="${isReadOnly ? 'Somente leitura' : 'Marcar como comprado'}"
           >
           <div class="product-info-group">
             <span class="product-name">${escapeHtml(item.name)}</span>
@@ -400,9 +462,11 @@ function renderProductCards(list) {
 
         <div class="product-right-col">
           <span class="product-subtotal-val">${formatCurrency(subtotal)}</span>
-          <button class="btn-trash" title="Excluir item" onclick="handleDeleteItem('${list.id}', '${item.id}')">
-            ✕
-          </button>
+          ${!isReadOnly ? `
+            <button class="btn-trash" title="Excluir item" onclick="handleDeleteItem('${list.id}', '${item.id}')">
+              ✕
+            </button>
+          ` : ''}
         </div>
       </div>
     `;
@@ -877,15 +941,198 @@ function setupEventListeners() {
     }
   });
 
-  // Alternância de Abas Principais (Listas vs Histórico & Balanço)
+  // Alternância de Abas Principais (Listas, Carteira, Histórico, Perfil, Admin)
   const tabListas = document.getElementById('tab-nav-listas');
-  if (tabListas) {
-    tabListas.addEventListener('click', () => switchAppTab('listas'));
-  }
+  if (tabListas) tabListas.addEventListener('click', () => switchAppTab('listas'));
+
+  const tabCarteira = document.getElementById('tab-nav-carteira');
+  if (tabCarteira) tabCarteira.addEventListener('click', () => switchAppTab('carteira'));
 
   const tabHistorico = document.getElementById('tab-nav-historico');
-  if (tabHistorico) {
-    tabHistorico.addEventListener('click', () => switchAppTab('historico'));
+  if (tabHistorico) tabHistorico.addEventListener('click', () => switchAppTab('historico'));
+
+  const tabPerfil = document.getElementById('tab-nav-perfil');
+  if (tabPerfil) tabPerfil.addEventListener('click', () => switchAppTab('perfil'));
+
+  const tabAdmin = document.getElementById('tab-nav-admin');
+  if (tabAdmin) tabAdmin.addEventListener('click', () => switchAppTab('admin'));
+
+  // Ações de Dashboard: Nova Lista e Entrar via Convite
+  const btnDashNovaLista = document.getElementById('btn-dashboard-nova-lista');
+  if (btnDashNovaLista) {
+    btnDashNovaLista.addEventListener('click', () => {
+      document.getElementById('form-nova-lista').reset();
+      openSheet('sheet-nova-lista');
+    });
+  }
+
+  const btnDashEntrarConvite = document.getElementById('btn-dashboard-entrar-convite');
+  if (btnDashEntrarConvite) {
+    btnDashEntrarConvite.addEventListener('click', () => {
+      document.getElementById('form-entrar-codigo').reset();
+      openSheet('sheet-entrar-lista-codigo');
+    });
+  }
+
+  // Ações de Compartilhamento no Detalhe da Lista
+  const btnDetalheCompartilhar = document.getElementById('btn-detalhe-compartilhar');
+  if (btnDetalheCompartilhar) {
+    btnDetalheCompartilhar.addEventListener('click', openCompartilharModal);
+  }
+
+  const btnFecharShare = document.getElementById('btn-fechar-sheet-compartilhar');
+  if (btnFecharShare) btnFecharShare.addEventListener('click', () => closeSheet('sheet-compartilhar-lista'));
+
+  const formShareEmail = document.getElementById('form-compartilhar-email');
+  if (formShareEmail) formShareEmail.addEventListener('submit', handleShareEmail);
+
+  const btnFecharEntrarCodigo = document.getElementById('btn-fechar-sheet-entrar-codigo');
+  if (btnFecharEntrarCodigo) btnFecharEntrarCodigo.addEventListener('click', () => closeSheet('sheet-entrar-lista-codigo'));
+
+  const formEntrarCodigo = document.getElementById('form-entrar-codigo');
+  if (formEntrarCodigo) formEntrarCodigo.addEventListener('submit', handleJoinListByCode);
+
+  const btnCopiarCodigo = document.getElementById('btn-copiar-codigo-share');
+  if (btnCopiarCodigo) {
+    btnCopiarCodigo.addEventListener('click', () => {
+      if (activeSharingList && activeSharingList.inviteCode) {
+        navigator.clipboard.writeText(activeSharingList.inviteCode).then(() => {
+          vibrateDevice(20);
+          alert(`Código copiado: ${activeSharingList.inviteCode}`);
+        }).catch(() => {
+          prompt('Copie o código abaixo:', activeSharingList.inviteCode);
+        });
+      }
+    });
+  }
+
+  const btnEnviarLinkWpp = document.getElementById('btn-enviar-link-whatsapp');
+  if (btnEnviarLinkWpp) {
+    btnEnviarLinkWpp.addEventListener('click', () => {
+      if (!activeSharingList) return;
+      const perm = document.querySelector('input[name="share-permission"]:checked')?.value || 'fechado';
+      const permText = perm === 'aberto' ? 'Modo Aberto (pode inserir e editar)' : 'Modo Fechado (somente leitura)';
+      const msg = `🛒 *Convite para Lista de Compras - Compras Plus*\nVocê foi convidado para a lista *${activeSharingList.name}* no *${permText}*.\n\nCódigo do Convite: *${activeSharingList.inviteCode}*\nOu abra diretamente:\n${activeSharingList.shareLink || window.location.href}`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+    });
+  }
+
+  // Seletores visuais de modo de permissão de compartilhamento
+  document.querySelectorAll('input[name="share-permission"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      document.querySelectorAll('.share-mode-card').forEach(c => c.classList.remove('active'));
+      const parentCard = e.target.closest('.share-mode-card');
+      if (parentCard) parentCard.classList.add('active');
+    });
+  });
+
+  // Ações da Carteira Financeira
+  const btnAbrirEntrada = document.getElementById('btn-abrir-nova-entrada');
+  if (btnAbrirEntrada) {
+    btnAbrirEntrada.addEventListener('click', () => {
+      document.getElementById('form-nova-entrada').reset();
+      document.getElementById('entrada-data').value = new Date().toISOString().split('T')[0];
+      openSheet('sheet-nova-entrada');
+    });
+  }
+
+  const btnCarteiraAddFirst = document.getElementById('btn-carteira-add-first');
+  if (btnCarteiraAddFirst) {
+    btnCarteiraAddFirst.addEventListener('click', () => {
+      document.getElementById('form-nova-entrada').reset();
+      document.getElementById('entrada-data').value = new Date().toISOString().split('T')[0];
+      openSheet('sheet-nova-entrada');
+    });
+  }
+
+  const btnFecharEntrada = document.getElementById('btn-fechar-sheet-entrada');
+  if (btnFecharEntrada) btnFecharEntrada.addEventListener('click', () => closeSheet('sheet-nova-entrada'));
+
+  const formNovaEntrada = document.getElementById('form-nova-entrada');
+  if (formNovaEntrada) formNovaEntrada.addEventListener('submit', handleSaveWalletEntry);
+
+  const filtroCarteiraAno = document.getElementById('filtro-carteira-ano');
+  if (filtroCarteiraAno) filtroCarteiraAno.addEventListener('change', (e) => {
+    walletFilter.year = e.target.value;
+    loadAndRenderWallet();
+  });
+
+  const filtroCarteiraMes = document.getElementById('filtro-carteira-mes');
+  if (filtroCarteiraMes) filtroCarteiraMes.addEventListener('change', (e) => {
+    walletFilter.month = e.target.value;
+    loadAndRenderWallet();
+  });
+
+  const btnRecarregarCarteira = document.getElementById('btn-recarregar-carteira');
+  if (btnRecarregarCarteira) btnRecarregarCarteira.addEventListener('click', loadAndRenderWallet);
+
+  // Ações de Perfil
+  const formEditarPerfil = document.getElementById('form-editar-perfil');
+  if (formEditarPerfil) formEditarPerfil.addEventListener('submit', handleSaveProfile);
+
+  const btnPerfilLogout = document.getElementById('btn-perfil-logout');
+  if (btnPerfilLogout) btnPerfilLogout.addEventListener('click', handleLogout);
+
+  const btnHeaderLogout = document.getElementById('btn-header-logout');
+  if (btnHeaderLogout) btnHeaderLogout.addEventListener('click', handleLogout);
+
+  const btnPerfilSync = document.getElementById('btn-perfil-sync');
+  if (btnPerfilSync) btnPerfilSync.addEventListener('click', handleSyncNow);
+
+  const btnPerfilAdmin = document.getElementById('btn-perfil-admin-link');
+  if (btnPerfilAdmin) btnPerfilAdmin.addEventListener('click', () => switchAppTab('admin'));
+
+  // Ações da Página Admin
+  const btnAdminVoltar = document.getElementById('btn-admin-voltar-app');
+  if (btnAdminVoltar) btnAdminVoltar.addEventListener('click', () => switchAppTab('listas'));
+
+  const btnAdminCsv = document.getElementById('btn-admin-download-csv');
+  if (btnAdminCsv) btnAdminCsv.addEventListener('click', exportLeadsToCsv);
+
+  const btnAdminRefresh = document.getElementById('btn-admin-refresh-data');
+  if (btnAdminRefresh) btnAdminRefresh.addEventListener('click', loadAdminPageView);
+
+  const btnAdminOpenDb = document.getElementById('btn-admin-open-db-config');
+  if (btnAdminOpenDb) btnAdminOpenDb.addEventListener('click', () => openSheet('modal-config-db'));
+
+  const searchAdminLeads = document.getElementById('admin-input-search-leads');
+  if (searchAdminLeads) searchAdminLeads.addEventListener('input', (e) => {
+    const q = (e.target.value || '').toLowerCase();
+    const filtered = adminLeadsCache.filter(l => 
+      (l.name && l.name.toLowerCase().includes(q)) || 
+      (l.email && l.email.toLowerCase().includes(q)) || 
+      (l.phone && l.phone.includes(q))
+    );
+    renderAdminPageLeads(filtered);
+  });
+
+  // Eventos da Página de Login Inicial
+  const btnTabChoiceLogin = document.getElementById('btn-tab-choice-login');
+  if (btnTabChoiceLogin) btnTabChoiceLogin.addEventListener('click', () => showInitialAuthTab('login'));
+
+  const btnTabChoiceSignup = document.getElementById('btn-tab-choice-signup');
+  if (btnTabChoiceSignup) btnTabChoiceSignup.addEventListener('click', () => showInitialAuthTab('signup'));
+
+  const btnInitialForgot = document.getElementById('btn-initial-forgot-pass');
+  if (btnInitialForgot) btnInitialForgot.addEventListener('click', () => showInitialAuthTab('recovery'));
+
+  const btnInitialBackLogin = document.getElementById('btn-initial-back-to-login');
+  if (btnInitialBackLogin) btnInitialBackLogin.addEventListener('click', () => showInitialAuthTab('login'));
+
+  const formInitialLogin = document.getElementById('form-initial-login');
+  if (formInitialLogin) formInitialLogin.addEventListener('submit', handleInitialLogin);
+
+  const formInitialSignup = document.getElementById('form-initial-signup');
+  if (formInitialSignup) formInitialSignup.addEventListener('submit', handleInitialSignup);
+
+  const btnInitialSendRecovery = document.getElementById('btn-initial-send-recovery');
+  if (btnInitialSendRecovery) btnInitialSendRecovery.addEventListener('click', handleInitialRecovery);
+
+  const initialPhoneInput = document.getElementById('initial-signup-phone');
+  if (initialPhoneInput) {
+    initialPhoneInput.addEventListener('input', (e) => {
+      e.target.value = formatPhoneInput(e.target.value);
+    });
   }
 
   // Finalizar Compra & Gravar Histórico
@@ -921,11 +1168,9 @@ function setupEventListeners() {
   document.getElementById('btn-header-auth').addEventListener('click', () => {
     vibrateDevice(15);
     if (db.isAuthenticated()) {
-      updateAuthUI();
-      openSheet('sheet-perfil');
+      switchAppTab('perfil');
     } else {
-      showAuthTab('login');
-      openSheet('sheet-auth');
+      lockAppWithAuthGate();
     }
   });
 
@@ -935,11 +1180,11 @@ function setupEventListeners() {
     btnAbrirAdmin.addEventListener('click', () => {
       vibrateDevice(15);
       closeSheet('sheet-perfil');
-      openAdminPanel();
+      switchAppTab('admin');
     });
   }
 
-  // Ações do Painel Admin
+  // Ações do Painel Admin Modal
   const btnRecarregarAdmin = document.getElementById('btn-recarregar-admin');
   if (btnRecarregarAdmin) {
     btnRecarregarAdmin.addEventListener('click', loadAdminData);
@@ -957,14 +1202,13 @@ function setupEventListeners() {
     });
   }
 
-  // Abas de Autenticação
+  // Abas de Autenticação Modal
   document.getElementById('tab-btn-login').addEventListener('click', () => showAuthTab('login'));
   document.getElementById('tab-btn-signup').addEventListener('click', () => showAuthTab('signup'));
   document.getElementById('btn-esqueci-senha').addEventListener('click', () => showAuthTab('recovery'));
   document.getElementById('btn-voltar-login').addEventListener('click', () => showAuthTab('login'));
 
-
-  // Submissão dos Formulários de Autenticação
+  // Submissão dos Formulários de Autenticação Modal
   document.getElementById('form-auth-login').addEventListener('submit', handleAuthLogin);
   document.getElementById('form-auth-signup').addEventListener('submit', handleAuthSignup);
   document.getElementById('form-auth-recovery').addEventListener('submit', handleAuthRecovery);
@@ -1532,41 +1776,636 @@ function exportLeadsToCsv() {
 function switchAppTab(tabName) {
   vibrateDevice(15);
   const tabListas = document.getElementById('tab-nav-listas');
+  const tabCarteira = document.getElementById('tab-nav-carteira');
   const tabHist = document.getElementById('tab-nav-historico');
+  const tabPerfil = document.getElementById('tab-nav-perfil');
+  const tabAdmin = document.getElementById('tab-nav-admin');
+
   const viewDashboard = document.getElementById('view-dashboard');
   const viewDetalhe = document.getElementById('view-lista-detalhe');
+  const viewCarteira = document.getElementById('view-carteira');
   const viewHistorico = document.getElementById('view-historico');
+  const viewPerfil = document.getElementById('view-perfil');
+  const viewAdmin = document.getElementById('view-admin');
   const fab = document.getElementById('fab-action-btn');
+
+  // Reseta abas ativas
+  [tabListas, tabCarteira, tabHist, tabPerfil, tabAdmin].forEach(t => t && t.classList.remove('active'));
+  // Oculta todas as telas
+  [viewDashboard, viewDetalhe, viewCarteira, viewHistorico, viewPerfil, viewAdmin].forEach(v => v && v.classList.add('hidden'));
 
   if (tabName === 'listas') {
     if (tabListas) tabListas.classList.add('active');
-    if (tabHist) tabHist.classList.remove('active');
-    if (viewHistorico) viewHistorico.classList.add('hidden');
-
     if (state.activeListId) {
-      if (viewDashboard) viewDashboard.classList.add('hidden');
       if (viewDetalhe) viewDetalhe.classList.remove('hidden');
     } else {
       if (viewDashboard) viewDashboard.classList.remove('hidden');
-      if (viewDetalhe) viewDetalhe.classList.add('hidden');
     }
-
     if (fab) fab.classList.remove('hidden');
     if (window.admobManager && typeof window.admobManager.renderWebBanner === 'function') {
       window.admobManager.renderWebBanner();
     }
+  } else if (tabName === 'carteira') {
+    if (tabCarteira) tabCarteira.classList.add('active');
+    if (viewCarteira) viewCarteira.classList.remove('hidden');
+    if (fab) fab.classList.add('hidden');
+    loadAndRenderWallet();
   } else if (tabName === 'historico') {
-    if (tabListas) tabListas.classList.remove('active');
     if (tabHist) tabHist.classList.add('active');
-    if (viewDashboard) viewDashboard.classList.add('hidden');
-    if (viewDetalhe) viewDetalhe.classList.add('hidden');
     if (viewHistorico) viewHistorico.classList.remove('hidden');
-
     if (fab) fab.classList.add('hidden');
     loadAndRenderHistory();
     if (window.admobManager && typeof window.admobManager.renderNativeAd === 'function') {
       window.admobManager.renderNativeAd('admob-native-slot');
     }
+  } else if (tabName === 'perfil') {
+    if (tabPerfil) tabPerfil.classList.add('active');
+    if (viewPerfil) viewPerfil.classList.remove('hidden');
+    if (fab) fab.classList.add('hidden');
+    loadUserProfileView();
+  } else if (tabName === 'admin') {
+    if (tabAdmin) tabAdmin.classList.add('active');
+    if (viewAdmin) viewAdmin.classList.remove('hidden');
+    if (fab) fab.classList.add('hidden');
+    loadAdminPageView();
+  }
+}
+
+// ==========================================================
+// MÓDULO CARTEIRA FINANCEIRA (ENTRADAS & SALDO)
+// ==========================================================
+let walletFilter = {
+  year: new Date().getFullYear(),
+  month: 'all'
+};
+
+async function loadAndRenderWallet() {
+  const selectAno = document.getElementById('filtro-carteira-ano');
+  const selectMes = document.getElementById('filtro-carteira-mes');
+
+  // Preenche anos disponíveis
+  const currentYear = new Date().getFullYear();
+  if (selectAno && selectAno.options.length === 0) {
+    for (let y = currentYear - 2; y <= currentYear + 2; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = `Ano ${y}`;
+      if (y === walletFilter.year) opt.selected = true;
+      selectAno.appendChild(opt);
+    }
+  }
+
+  const entries = await db.getWalletEntries(walletFilter);
+  const purchases = await db.getPurchaseHistory();
+
+  const balance = db.calculateWalletBalance(entries, purchases, walletFilter);
+
+  // Cards de balanço
+  const elEntradas = document.getElementById('carteira-total-entradas');
+  const elSaidas = document.getElementById('carteira-total-saidas');
+  const elSaldo = document.getElementById('carteira-saldo-carteira');
+  const elBadge = document.getElementById('carteira-saldo-badge');
+
+  if (elEntradas) elEntradas.textContent = formatCurrency(balance.totalEntradas);
+  if (elSaidas) elSaidas.textContent = formatCurrency(balance.totalSaidas);
+  if (elSaldo) elSaldo.textContent = formatCurrency(balance.saldoDisponivel);
+
+  const elEntradasCount = document.getElementById('carteira-entradas-count');
+  const elSaidasCount = document.getElementById('carteira-saidas-count');
+  if (elEntradasCount) elEntradasCount.textContent = `${balance.entriesCount} ${balance.entriesCount === 1 ? 'registro' : 'registros'}`;
+  if (elSaidasCount) elSaidasCount.textContent = `${balance.purchasesCount} ${balance.purchasesCount === 1 ? 'compra registrada' : 'compras registradas'}`;
+
+  if (elBadge) {
+    if (balance.saldoDisponivel >= 0) {
+      elBadge.className = 'carteira-status-badge badge-green';
+      elBadge.textContent = 'Saldo Positivo (No Verde)';
+    } else {
+      elBadge.className = 'carteira-status-badge badge-red';
+      elBadge.textContent = 'Atenção: Gastos superaram a renda!';
+    }
+  }
+
+  // Breakdown de rendas
+  const elSalario = document.getElementById('carteira-sum-salario');
+  const elExtra = document.getElementById('carteira-sum-extra');
+  const elAReceber = document.getElementById('carteira-sum-areceber');
+
+  const sumSalario = (balance.byCategory['Salário'] || 0);
+  const sumExtra = (balance.byCategory['Renda Extra'] || 0);
+  if (elSalario) elSalario.textContent = formatCurrency(sumSalario);
+  if (elExtra) elExtra.textContent = formatCurrency(sumExtra);
+  if (elAReceber) elAReceber.textContent = formatCurrency(balance.totalAReceber);
+
+  // Lista de Entradas
+  const listContainer = document.getElementById('carteira-entries-list');
+  const emptyState = document.getElementById('empty-state-carteira');
+
+  if (!listContainer) return;
+
+  if (balance.filteredEntries.length === 0) {
+    listContainer.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add('hidden');
+
+  const catIcons = {
+    'Salário': '💼',
+    'Renda Extra': '⚡',
+    'Investimentos': '📈',
+    'Presente': '🎁',
+    'Outros': '💵'
+  };
+
+  listContainer.innerHTML = balance.filteredEntries.map(e => {
+    const icon = catIcons[e.category] || '💵';
+    const statusText = e.status === 'recebido' ? '✅ Recebido' : '⏳ A Receber';
+    const statusColor = e.status === 'recebido' ? '#166534' : '#b45309';
+    const dateFormatted = `${String(e.day).padStart(2, '0')}/${String(e.month).padStart(2, '0')}/${e.year}`;
+
+    return `
+      <div class="carteira-entry-card">
+        <div class="carteira-entry-left">
+          <div class="carteira-entry-icon">${icon}</div>
+          <div>
+            <div class="carteira-entry-desc">${escapeHtml(e.description)}</div>
+            <div class="carteira-entry-meta">
+              <span>${escapeHtml(e.category)}</span>
+              <span>•</span>
+              <span>${dateFormatted}</span>
+              <span>•</span>
+              <span style="color:${statusColor}; font-weight:700;">${statusText}</span>
+            </div>
+          </div>
+        </div>
+        <div class="carteira-entry-right">
+          <span class="carteira-entry-amount">+ ${formatCurrency(e.amount)}</span>
+          <button type="button" class="btn-del-entry" title="Excluir renda" onclick="handleDeleteWalletEntry('${e.id}')">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function handleSaveWalletEntry(e) {
+  e.preventDefault();
+  const desc = document.getElementById('entrada-descricao').value.trim();
+  const valor = parseFloat(document.getElementById('entrada-valor').value) || 0;
+  const categoria = document.getElementById('entrada-categoria').value;
+  const status = document.getElementById('entrada-status').value;
+  const data = document.getElementById('entrada-data').value;
+  const btn = document.getElementById('btn-salvar-entrada-submit');
+
+  if (!desc || valor <= 0) {
+    alert('Informe uma descrição e um valor válido.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Gravando...';
+
+  try {
+    await db.saveWalletEntry({
+      description: desc,
+      amount: valor,
+      category: categoria,
+      status: status,
+      entryDate: data
+    });
+
+    vibrateDevice(25);
+    closeSheet('sheet-nova-entrada');
+    document.getElementById('form-nova-entrada').reset();
+    loadAndRenderWallet();
+  } catch (err) {
+    alert('Erro ao gravar entrada: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Gravar na Carteira';
+  }
+}
+
+window.handleDeleteWalletEntry = async function(id) {
+  if (confirm('Deseja realmente excluir esta entrada financeira?')) {
+    vibrateDevice(20);
+    try {
+      await db.deleteWalletEntry(id);
+      loadAndRenderWallet();
+    } catch (err) {
+      alert('Erro ao excluir: ' + err.message);
+    }
+  }
+};
+
+// ==========================================================
+// PÁGINA DE PERFIL DO USUÁRIO
+// ==========================================================
+
+function loadUserProfileView() {
+  const user = db.getUser();
+  if (!user) return;
+
+  const rawName = user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário';
+  const initial = rawName.charAt(0).toUpperCase();
+  const phone = user.user_metadata?.phone || '';
+
+  const elName = document.getElementById('perfil-view-name');
+  const elEmail = document.getElementById('perfil-view-email');
+  const elAvatar = document.getElementById('perfil-avatar-circle');
+  const inputName = document.getElementById('perfil-input-name');
+  const inputPhone = document.getElementById('perfil-input-phone');
+  const btnAdminLink = document.getElementById('btn-perfil-admin-link');
+
+  if (elName) elName.textContent = rawName;
+  if (elEmail) elEmail.textContent = user.email;
+  if (elAvatar) elAvatar.textContent = db.isAdmin() ? '🛡️' : initial;
+  if (inputName) inputName.value = rawName;
+  if (inputPhone) inputPhone.value = phone;
+
+  if (btnAdminLink) {
+    if (db.isAdmin()) {
+      btnAdminLink.classList.remove('hidden');
+    } else {
+      btnAdminLink.classList.add('hidden');
+    }
+  }
+}
+
+async function handleSaveProfile(e) {
+  e.preventDefault();
+  const name = document.getElementById('perfil-input-name').value.trim();
+  const phone = document.getElementById('perfil-input-phone').value.trim();
+  const btn = document.getElementById('btn-salvar-perfil');
+
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  try {
+    await db.updateUserProfile({ name, phone });
+    vibrateDevice(25);
+    alert('Perfil atualizado com sucesso!');
+    loadUserProfileView();
+    updateAuthUI();
+  } catch (err) {
+    alert('Erro ao atualizar perfil: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Salvar Alterações';
+  }
+}
+
+// ==========================================================
+// PÁGINA DE ADMINISTRAÇÃO SAAS (LEADS E MÉTRICAS)
+// ==========================================================
+// Reusa adminLeadsCache declarado anteriormente
+
+async function loadAdminPageView() {
+  const elLeadsVal = document.getElementById('admin-stat-leads-val');
+  const elWppVal = document.getElementById('admin-stat-whatsapp-val');
+  const elListasVal = document.getElementById('admin-stat-listas-val');
+  const loading = document.getElementById('admin-page-leads-loading');
+  const container = document.getElementById('admin-page-leads-container');
+  const empty = document.getElementById('admin-page-leads-empty');
+
+  if (loading) loading.classList.remove('hidden');
+  if (container) container.classList.add('hidden');
+  if (empty) empty.classList.add('hidden');
+
+  try {
+    const leads = await db.getAllUserProfiles();
+    adminLeadsCache = leads || [];
+
+    const totalLeads = adminLeadsCache.length;
+    const withPhone = adminLeadsCache.filter(l => l.phone && l.phone.trim().length > 6).length;
+
+    let totalLists = 0;
+    try {
+      const listsRes = await fetch(`${db.supabaseUrl}/rest/v1/listas?select=id`, {
+        headers: db.getHeaders()
+      });
+      if (listsRes.ok) {
+        const lData = await listsRes.json();
+        totalLists = lData.length;
+      }
+    } catch (_) {}
+
+    if (elLeadsVal) elLeadsVal.textContent = totalLeads;
+    if (elWppVal) elWppVal.textContent = withPhone;
+    if (elListasVal) elListasVal.textContent = totalLists;
+
+    renderAdminPageLeads(adminLeadsCache);
+  } catch (err) {
+    console.warn('Erro ao carregar painel admin:', err);
+  } finally {
+    if (loading) loading.classList.add('hidden');
+  }
+}
+
+function renderAdminPageLeads(leads) {
+  const container = document.getElementById('admin-page-leads-container');
+  const empty = document.getElementById('admin-page-leads-empty');
+  if (!container) return;
+
+  if (leads.length === 0) {
+    container.classList.add('hidden');
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+
+  container.classList.remove('hidden');
+  if (empty) empty.classList.add('hidden');
+
+  container.innerHTML = leads.map(lead => {
+    const rawName = lead.name || 'Sem nome informado';
+    const email = lead.email || 'Sem e-mail';
+    const rawPhone = lead.phone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    const dateFormatted = lead.created_at ? new Date(lead.created_at).toLocaleDateString('pt-BR') : 'Data não reg.';
+    const isAdmin = lead.role === 'admin' || (email && email.toLowerCase().trim() === 'viniciuscirne@gmail.com');
+
+    const whatsappBtn = cleanPhone.length >= 10 ? `
+      <a href="https://wa.me/55${cleanPhone}?text=${encodeURIComponent(`Olá ${rawName}! Vimos que você está usando o Compras Plus...`)}" 
+         target="_blank" 
+         class="btn-lead-whatsapp" 
+         title="Abrir WhatsApp">
+        📲 Conversar
+      </a>
+    ` : `<span class="badge-no-phone">Sem WhatsApp</span>`;
+
+    return `
+      <div class="lead-crm-card ${isAdmin ? 'admin-lead' : ''}">
+        <div class="lead-crm-top">
+          <div>
+            <div class="lead-crm-name">
+              ${escapeHtml(rawName)}
+              ${isAdmin ? '<span class="lead-badge-admin">ADMIN</span>' : ''}
+            </div>
+            <div class="lead-crm-email">${escapeHtml(email)}</div>
+          </div>
+          ${whatsappBtn}
+        </div>
+        <div class="lead-crm-meta">
+          <span>📲 ${rawPhone ? escapeHtml(rawPhone) : 'Não informado'}</span>
+          <span>📅 ${dateFormatted}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==========================================================
+// LISTAS COMPARTILHADAS (MODO ABERTO VS FECHADO)
+// ==========================================================
+let activeSharingList = null;
+
+async function openCompartilharModal() {
+  if (!state.activeListId) return;
+  const list = state.lists.find(l => l.id === state.activeListId);
+  if (!list) return;
+
+  activeSharingList = list;
+  const title = document.getElementById('compartilhar-nome-lista');
+  if (title) title.textContent = `Lista: ${list.name}`;
+
+  // Gera código amigável
+  const permSelector = document.querySelector('input[name="share-permission"]:checked')?.value || 'fechado';
+  try {
+    const codeObj = await db.createShareInviteCode(list.id, permSelector);
+    const displayCode = document.getElementById('share-display-code');
+    if (displayCode) displayCode.textContent = codeObj.inviteCode;
+    activeSharingList.shareLink = codeObj.shareLink;
+    activeSharingList.inviteCode = codeObj.inviteCode;
+  } catch (_) {}
+
+  await renderCollaboratorsList(list.id);
+  openSheet('sheet-compartilhar-lista');
+}
+
+async function renderCollaboratorsList(listId) {
+  const container = document.getElementById('share-collaborators-list');
+  if (!container) return;
+
+  container.innerHTML = '<span style="font-size:0.75rem; color:var(--text-muted);">Buscando acessos...</span>';
+  try {
+    const collaborators = await db.getListCollaborators(listId);
+    if (!collaborators || collaborators.length === 0) {
+      container.innerHTML = '<span style="font-size:0.75rem; color:var(--text-muted);">Nenhum convidado adicionado ainda.</span>';
+      return;
+    }
+
+    container.innerHTML = collaborators.map(c => {
+      const modeTag = c.permission === 'aberto' 
+        ? '<span class="badge-shared-tag tag-aberto">Modo Aberto</span>' 
+        : '<span class="badge-shared-tag tag-fechado">Modo Fechado</span>';
+
+      return `
+        <div class="collaborator-item-card">
+          <div>
+            <strong>${escapeHtml(c.shared_with_email)}</strong>
+            <div style="margin-top:2px;">${modeTag}</div>
+          </div>
+          <button type="button" class="btn-del-entry" title="Remover acesso" onclick="handleRemoveCollaborator('${c.id}')">
+            ✕
+          </button>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<span style="font-size:0.75rem; color:var(--text-muted);">Nenhum convidado adicional.</span>';
+  }
+}
+
+window.handleRemoveCollaborator = async function(shareId) {
+  if (confirm('Deseja revogar o acesso deste usuário à sua lista?')) {
+    vibrateDevice(20);
+    await db.removeCollaborator(shareId);
+    if (activeSharingList) renderCollaboratorsList(activeSharingList.id);
+  }
+};
+
+async function handleShareEmail(e) {
+  e.preventDefault();
+  if (!activeSharingList) return;
+  const emailInput = document.getElementById('share-input-email');
+  const email = emailInput.value.trim();
+  const perm = document.querySelector('input[name="share-permission"]:checked')?.value || 'fechado';
+  const btn = document.getElementById('btn-submit-share-email');
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    await db.shareListWithEmail(activeSharingList.id, email, perm);
+    vibrateDevice(25);
+    alert(`Lista compartilhada com sucesso com ${email} no ${perm === 'aberto' ? 'Modo Aberto (Editar)' : 'Modo Fechado (Apenas Ver)'}!`);
+    emailInput.value = '';
+    renderCollaboratorsList(activeSharingList.id);
+  } catch (err) {
+    alert('Erro ao compartilhar lista: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enviar';
+  }
+}
+
+async function handleJoinListByCode(e) {
+  e.preventDefault();
+  const input = document.getElementById('input-convite-codigo');
+  const code = input.value.trim();
+  const btn = document.getElementById('btn-submit-entrar-codigo');
+
+  btn.disabled = true;
+  btn.textContent = 'Conectando...';
+
+  try {
+    const result = await db.joinSharedListByCode(code);
+    vibrateDevice(30);
+    closeSheet('sheet-entrar-lista-codigo');
+    input.value = '';
+    alert(`🎉 Lista "${result.list.name}" conectada à sua conta com sucesso! Permissão: ${result.permission === 'aberto' ? 'Modo Aberto (Inserir & Editar)' : 'Modo Fechado (Somente Leitura)'}.`);
+    state.lists = await db.getLists();
+    renderDashboard();
+    openList(result.list.id);
+  } catch (err) {
+    alert('Erro ao conectar lista: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Conectar Lista';
+  }
+}
+
+// ==========================================================
+// PÁGINA DE LOGIN INICIAL (LANDING DEDICADA)
+// ==========================================================
+function showInitialAuthTab(tab) {
+  const formLogin = document.getElementById('form-initial-login');
+  const formSignup = document.getElementById('form-initial-signup');
+  const blockRecovery = document.getElementById('block-initial-recovery');
+  const btnTabLogin = document.getElementById('btn-tab-choice-login');
+  const btnTabSignup = document.getElementById('btn-tab-choice-signup');
+  const alertBox = document.getElementById('auth-initial-alert');
+
+  if (alertBox) {
+    alertBox.classList.add('hidden');
+    alertBox.textContent = '';
+  }
+
+  if (tab === 'login') {
+    if (formLogin) formLogin.classList.remove('hidden');
+    if (formSignup) formSignup.classList.add('hidden');
+    if (blockRecovery) blockRecovery.classList.add('hidden');
+    if (btnTabLogin) btnTabLogin.classList.add('active');
+    if (btnTabSignup) btnTabSignup.classList.remove('active');
+  } else if (tab === 'signup') {
+    if (formLogin) formLogin.classList.add('hidden');
+    if (formSignup) formSignup.classList.remove('hidden');
+    if (blockRecovery) blockRecovery.classList.add('hidden');
+    if (btnTabLogin) btnTabLogin.classList.remove('active');
+    if (btnTabSignup) btnTabSignup.classList.add('active');
+  } else if (tab === 'recovery') {
+    if (formLogin) formLogin.classList.add('hidden');
+    if (formSignup) formSignup.classList.add('hidden');
+    if (blockRecovery) blockRecovery.classList.remove('hidden');
+  }
+}
+
+function showInitialAuthAlert(msg, type = 'error') {
+  const alertBox = document.getElementById('auth-initial-alert');
+  if (alertBox) {
+    alertBox.className = `auth-alert ${type}`;
+    alertBox.textContent = msg;
+    alertBox.classList.remove('hidden');
+  }
+}
+
+async function handleInitialLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('initial-login-email').value.trim();
+  const pass = document.getElementById('initial-login-password').value;
+  const remember = document.getElementById('initial-login-remember')?.checked ?? true;
+  const btn = document.getElementById('btn-initial-login-submit');
+
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+
+  try {
+    await db.signIn(email, pass, remember);
+    vibrateDevice(25);
+    unlockAppFromAuthGate();
+    await db.migrateLocalListsToCloud();
+    await loadDataFromDb();
+  } catch (err) {
+    vibrateDevice(40);
+    showInitialAuthAlert(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Entrar no Aplicativo';
+  }
+}
+
+async function handleInitialSignup(e) {
+  e.preventDefault();
+  const name = document.getElementById('initial-signup-name').value.trim();
+  const email = document.getElementById('initial-signup-email').value.trim();
+  const phone = document.getElementById('initial-signup-phone').value.trim();
+  const pass = document.getElementById('initial-signup-password').value;
+  const consent = document.getElementById('initial-signup-marketing')?.checked ?? true;
+  const btn = document.getElementById('btn-initial-signup-submit');
+
+  const cleanPhone = phone.replace(/\D/g, '');
+  if (cleanPhone.length < 10) {
+    showInitialAuthAlert('Por favor, informe um número de WhatsApp válido com DDD (ex: (11) 99999-9999).', 'error');
+    document.getElementById('initial-signup-phone').focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Criando conta...';
+
+  try {
+    await db.signUp(email, pass, name, phone, consent);
+    vibrateDevice(30);
+    if (db.isAuthenticated()) {
+      unlockAppFromAuthGate();
+      await db.migrateLocalListsToCloud();
+      await loadDataFromDb();
+    } else {
+      showInitialAuthAlert('Conta criada! Verifique seu e-mail para confirmação e faça login.', 'success');
+      setTimeout(() => showInitialAuthTab('login'), 3500);
+    }
+  } catch (err) {
+    vibrateDevice(40);
+    showInitialAuthAlert(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Criar Minha Conta Grátis';
+  }
+}
+
+async function handleInitialRecovery(e) {
+  e.preventDefault();
+  const email = document.getElementById('initial-recovery-email').value.trim();
+  const btn = document.getElementById('btn-initial-send-recovery');
+
+  if (!email) {
+    showInitialAuthAlert('Digite seu e-mail cadastrado.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    await db.resetPassword(email);
+    showInitialAuthAlert('Link de recuperação enviado para o seu e-mail!', 'success');
+  } catch (err) {
+    showInitialAuthAlert(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✉️ Enviar Link de Recuperação';
   }
 }
 

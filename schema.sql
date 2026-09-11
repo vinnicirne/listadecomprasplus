@@ -225,4 +225,172 @@ begin
   end if;
 end $$;
 
+-- ==========================================================
+-- 11. Tabela de Carteira Financeira (Entradas, Salário e Renda Extra)
+-- ==========================================================
+create table if not exists public.carteira_entradas (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  description text not null,
+  amount numeric(12, 2) not null default 0.00,
+  category text not null default 'Salário',
+  status text not null default 'recebido', -- 'recebido' ou 'a_receber'
+  entry_date date not null default current_date,
+  day integer not null,
+  month integer not null,
+  year integer not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists idx_carteira_user_id on public.carteira_entradas(user_id);
+create index if not exists idx_carteira_date on public.carteira_entradas(entry_date desc);
+create index if not exists idx_carteira_year_month on public.carteira_entradas(year, month);
+
+alter table public.carteira_entradas enable row level security;
+
+drop policy if exists "SaaS: Usuários veem suas próprias entradas da carteira" on public.carteira_entradas;
+create policy "SaaS: Usuários veem suas próprias entradas da carteira" 
+  on public.carteira_entradas for select 
+  using (
+    (auth.uid() is not null and auth.uid() = user_id)
+    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or exists (
+      select 1 from public.user_profiles p 
+      where p.id = auth.uid() and p.role = 'admin'
+    )
+  );
+
+drop policy if exists "SaaS: Usuários criam suas entradas da carteira" on public.carteira_entradas;
+create policy "SaaS: Usuários criam suas entradas da carteira" 
+  on public.carteira_entradas for insert 
+  with check (
+    auth.uid() is not null and auth.uid() = user_id
+  );
+
+drop policy if exists "SaaS: Usuários atualizam suas entradas da carteira" on public.carteira_entradas;
+create policy "SaaS: Usuários atualizam suas entradas da carteira" 
+  on public.carteira_entradas for update 
+  using (
+    auth.uid() is not null and auth.uid() = user_id
+  );
+
+drop policy if exists "SaaS: Usuários excluem suas entradas da carteira" on public.carteira_entradas;
+create policy "SaaS: Usuários excluem suas entradas da carteira" 
+  on public.carteira_entradas for delete 
+  using (
+    auth.uid() is not null and auth.uid() = user_id
+  );
+
+-- Habilitar Realtime para carteira_entradas
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'carteira_entradas'
+  ) then
+    alter publication supabase_realtime add table public.carteira_entradas;
+  end if;
+end $$;
+
+-- ==========================================================
+-- 12. Tabela de Listas Compartilhadas (Modo Aberto vs Fechado)
+-- ==========================================================
+create table if not exists public.lista_compartilhamentos (
+  id text primary key,
+  lista_id text not null references public.listas(id) on delete cascade,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  shared_with_email text not null,
+  shared_with_user_id uuid references auth.users(id) on delete cascade,
+  permission text not null check (permission in ('aberto', 'fechado')) default 'fechado',
+  invite_code text unique,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create index if not exists idx_compartilhamentos_lista on public.lista_compartilhamentos(lista_id);
+create index if not exists idx_compartilhamentos_target_user on public.lista_compartilhamentos(shared_with_user_id);
+create index if not exists idx_compartilhamentos_target_email on public.lista_compartilhamentos(lower(trim(shared_with_email)));
+create index if not exists idx_compartilhamentos_code on public.lista_compartilhamentos(invite_code);
+
+alter table public.lista_compartilhamentos enable row level security;
+
+-- Políticas de RLS para compartilhamento
+drop policy if exists "SaaS: Usuários veem compartilhamentos onde são dono ou convidados" on public.lista_compartilhamentos;
+create policy "SaaS: Usuários veem compartilhamentos onde são dono ou convidados" 
+  on public.lista_compartilhamentos for select 
+  using (
+    auth.uid() = owner_id 
+    or auth.uid() = shared_with_user_id 
+    or lower(trim(shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+  );
+
+drop policy if exists "SaaS: Dono cria compartilhamentos de sua lista" on public.lista_compartilhamentos;
+create policy "SaaS: Dono cria compartilhamentos de sua lista" 
+  on public.lista_compartilhamentos for insert 
+  with check (
+    auth.uid() = owner_id
+  );
+
+drop policy if exists "SaaS: Dono atualiza compartilhamentos de sua lista" on public.lista_compartilhamentos;
+create policy "SaaS: Dono atualiza compartilhamentos de sua lista" 
+  on public.lista_compartilhamentos for update 
+  using (
+    auth.uid() = owner_id
+  );
+
+drop policy if exists "SaaS: Dono ou convidado exclui compartilhamento" on public.lista_compartilhamentos;
+create policy "SaaS: Dono ou convidado exclui compartilhamento" 
+  on public.lista_compartilhamentos for delete 
+  using (
+    auth.uid() = owner_id 
+    or auth.uid() = shared_with_user_id 
+    or lower(trim(shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+  );
+
+-- Atualização das Políticas da tabela 'listas' para considerar permissões de compartilhamento
+drop policy if exists "SaaS: Usuários veem suas próprias listas ou compartilhadas" on public.listas;
+create policy "SaaS: Usuários veem suas próprias listas ou compartilhadas" 
+  on public.listas for select 
+  using (
+    (auth.uid() is not null and auth.uid() = user_id)
+    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or exists (
+      select 1 from public.lista_compartilhamentos c 
+      where c.lista_id = listas.id 
+      and (
+        c.shared_with_user_id = auth.uid() 
+        or lower(trim(c.shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+      )
+    )
+  );
+
+drop policy if exists "SaaS: Usuários atualizam suas próprias listas ou compartilhadas em modo aberto" on public.listas;
+create policy "SaaS: Usuários atualizam suas próprias listas ou compartilhadas em modo aberto" 
+  on public.listas for update 
+  using (
+    (auth.uid() is not null and auth.uid() = user_id)
+    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or exists (
+      select 1 from public.lista_compartilhamentos c 
+      where c.lista_id = listas.id 
+      and c.permission = 'aberto'
+      and (
+        c.shared_with_user_id = auth.uid() 
+        or lower(trim(c.shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+      )
+    )
+  );
+
+-- Habilitar Realtime para lista_compartilhamentos
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'lista_compartilhamentos'
+  ) then
+    alter publication supabase_realtime add table public.lista_compartilhamentos;
+  end if;
+end $$;
+
+
 

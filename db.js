@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'ListaComprasDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 // Configuração Padrão do Supabase fornecida pelo usuário
 const DEFAULT_SUPABASE_URL = 'https://xlxuwqcszhxxzofebkjb.supabase.co';
@@ -46,6 +46,17 @@ class Database {
           const histStore = db.createObjectStore('historico', { keyPath: 'id' });
           histStore.createIndex('purchasedAt', 'purchasedAt', { unique: false });
           histStore.createIndex('userId', 'userId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('carteira')) {
+          const carteiraStore = db.createObjectStore('carteira', { keyPath: 'id' });
+          carteiraStore.createIndex('userId', 'userId', { unique: false });
+          carteiraStore.createIndex('entryDate', 'entryDate', { unique: false });
+          carteiraStore.createIndex('yearMonth', 'yearMonth', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('compartilhamentos')) {
+          const compStore = db.createObjectStore('compartilhamentos', { keyPath: 'id' });
+          compStore.createIndex('listaId', 'listaId', { unique: false });
+          compStore.createIndex('inviteCode', 'inviteCode', { unique: false });
         }
       };
 
@@ -402,16 +413,36 @@ class Database {
           this.isCloudOnline = true;
           this.isTableReady = true;
 
+          // Busca permissões de compartilhamento atribuídas ao usuário
+          let sharesMap = {};
+          try {
+            const sharesRes = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?select=*`, {
+              headers: this.getHeaders()
+            });
+            if (sharesRes.ok) {
+              const shares = await sharesRes.json();
+              shares.forEach(s => {
+                sharesMap[s.lista_id] = s.permission;
+              });
+            }
+          } catch (_) {}
+
           // Mapeia do schema do Supabase para o formato do app
-          const mappedLists = cloudData.map(row => ({
-            id: row.id,
-            userId: row.user_id,
-            name: row.name,
-            category: row.category,
-            budget: Number(row.budget) || 0,
-            items: Array.isArray(row.items) ? row.items : [],
-            createdAt: row.created_at || new Date().toISOString()
-          }));
+          const mappedLists = cloudData.map(row => {
+            const isOwner = row.user_id === this.user.id;
+            const permission = isOwner ? 'owner' : (sharesMap[row.id] || 'fechado');
+            return {
+              id: row.id,
+              userId: row.user_id,
+              name: row.name,
+              category: row.category,
+              budget: Number(row.budget) || 0,
+              items: Array.isArray(row.items) ? row.items : [],
+              createdAt: row.created_at || new Date().toISOString(),
+              isShared: !isOwner,
+              permission: permission
+            };
+          });
 
           // Atualiza o cache local no IndexedDB silenciosamente
           for (const list of mappedLists) {
@@ -425,7 +456,7 @@ class Database {
       }
     }
 
-    // 2. Fallback: Lê do IndexedDB local isolado por usuário
+    // 2. Fallback: Lê do IndexedDB local isolado por usuário ou compartilhadas
     return await this.getLocalLists();
   }
 
@@ -438,8 +469,8 @@ class Database {
       const request = store.getAll();
       request.onsuccess = () => {
         let lists = request.result || [];
-        // Filtra estritamente pelo ID do usuário autenticado atual
-        lists = lists.filter(l => l.userId && l.userId === this.user.id);
+        // Filtra pelo ID do usuário autenticado ou listas compartilhadas com ele
+        lists = lists.filter(l => (l.userId && l.userId === this.user.id) || l.isShared);
         lists.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         resolve(lists);
       };
@@ -962,7 +993,516 @@ class Database {
       filteredPurchases: filtered
     };
   }
+
+  // ==========================================================
+  // ATUALIZAÇÃO DO PERFIL DO USUÁRIO
+  // ==========================================================
+
+  /**
+   * Atualiza dados de Nome e WhatsApp do usuário no Auth e na tabela user_profiles
+   */
+  async updateUserProfile({ name, phone }) {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar logado para atualizar seu perfil.');
+    }
+
+    if (!this.user.user_metadata) {
+      this.user.user_metadata = {};
+    }
+    if (name !== undefined) this.user.user_metadata.name = name;
+    if (phone !== undefined) this.user.user_metadata.phone = phone;
+
+    await this.setSession(this.accessToken, this.user, localStorage.getItem('compras_plus_remember') === 'true');
+
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      try {
+        // Atualiza no Supabase Auth
+        await fetch(`${this.supabaseUrl}/auth/v1/user`, {
+          method: 'PUT',
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            data: { name, phone }
+          })
+        });
+
+        // Atualiza na tabela user_profiles
+        await fetch(`${this.supabaseUrl}/rest/v1/user_profiles?id=eq.${this.user.id}`, {
+          method: 'PATCH',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ name, phone })
+        });
+      } catch (err) {
+        console.warn('Erro ao atualizar perfil na nuvem:', err);
+      }
+    }
+
+    return this.user;
+  }
+
+  // ==========================================================
+  // MÓDULO CARTEIRA FINANCEIRA (ENTRADAS, SALÁRIO E RENDAS)
+  // ==========================================================
+
+  /**
+   * Grava ou atualiza uma entrada na carteira
+   */
+  async saveWalletEntry(entry) {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado para registrar entradas na carteira.');
+    }
+
+    await this.init();
+
+    const id = entry.id || 'wall_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    const entryDate = entry.entryDate || new Date().toISOString().split('T')[0];
+    const parts = entryDate.split('-');
+    const year = Number(parts[0]) || new Date().getFullYear();
+    const month = Number(parts[1]) || (new Date().getMonth() + 1);
+    const day = Number(parts[2]) || new Date().getDate();
+
+    const record = {
+      id,
+      userId: this.user ? this.user.id : null,
+      description: entry.description || 'Renda',
+      amount: Number(entry.amount) || 0,
+      category: entry.category || 'Salário',
+      status: entry.status || 'recebido', // 'recebido' ou 'a_receber'
+      entryDate,
+      day,
+      month,
+      year,
+      yearMonth: `${year}-${String(month).padStart(2, '0')}`,
+      createdAt: entry.createdAt || new Date().toISOString()
+    };
+
+    // 1. Salva no IndexedDB
+    const store = await this.getStore('carteira', 'readwrite');
+    await new Promise((resolve, reject) => {
+      const req = store.put(record);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => reject(req.error);
+    });
+
+    // 2. Sincroniza com o Supabase
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      try {
+        const payload = {
+          id: record.id,
+          user_id: record.userId,
+          description: record.description,
+          amount: record.amount,
+          category: record.category,
+          status: record.status,
+          entry_date: record.entryDate,
+          day: record.day,
+          month: record.month,
+          year: record.year,
+          created_at: record.createdAt
+        };
+
+        const res = await fetch(`${this.supabaseUrl}/rest/v1/carteira_entradas?on_conflict=id`, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'resolution=merge-duplicates,return=representation'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          this.isCloudOnline = true;
+        }
+      } catch (err) {
+        console.warn('Erro ao sincronizar entrada na carteira:', err);
+      }
+    }
+
+    return record;
+  }
+
+  /**
+   * Obtém as entradas da carteira com filtros opcionais de ano e mês
+   */
+  async getWalletEntries(filter = {}) {
+    if (!this.isAuthenticated()) {
+      return [];
+    }
+
+    await this.init();
+
+    // Tenta sincronizar com a nuvem
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      try {
+        const res = await fetch(`${this.supabaseUrl}/rest/v1/carteira_entradas?select=*&order=entry_date.desc`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+
+        if (res.ok) {
+          const cloudData = await res.json();
+          this.isCloudOnline = true;
+          const store = await this.getStore('carteira', 'readwrite');
+          for (const row of cloudData) {
+            const parts = (row.entry_date || '').split('-');
+            const y = Number(row.year) || Number(parts[0]) || new Date().getFullYear();
+            const m = Number(row.month) || Number(parts[1]) || 1;
+            const d = Number(row.day) || Number(parts[2]) || 1;
+
+            await new Promise((resolve) => {
+              const req = store.put({
+                id: row.id,
+                userId: row.user_id,
+                description: row.description,
+                amount: Number(row.amount) || 0,
+                category: row.category,
+                status: row.status,
+                entryDate: row.entry_date,
+                day: d,
+                month: m,
+                year: y,
+                yearMonth: `${y}-${String(m).padStart(2, '0')}`,
+                createdAt: row.created_at
+              });
+              req.onsuccess = () => resolve(true);
+              req.onerror = () => resolve(false);
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Falha ao sincronizar entradas da carteira da nuvem:', err);
+      }
+    }
+
+    // Lê do IndexedDB local
+    const store = await this.getStore('carteira', 'readonly');
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => {
+        let entries = request.result || [];
+        entries = entries.filter(e => e.userId === this.user.id);
+
+        if (filter.year && filter.year !== 'all') {
+          entries = entries.filter(e => Number(e.year) === Number(filter.year));
+        }
+        if (filter.month && filter.month !== 'all') {
+          entries = entries.filter(e => Number(e.month) === Number(filter.month));
+        }
+
+        entries.sort((a, b) => new Date(b.entryDate) - new Date(a.entryDate));
+        resolve(entries);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Exclui uma entrada da carteira
+   */
+  async deleteWalletEntry(id) {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado para excluir.');
+    }
+
+    const store = await this.getStore('carteira', 'readwrite');
+    await new Promise((resolve, reject) => {
+      const req = store.delete(id);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => reject(req.error);
+    });
+
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      try {
+        await fetch(`${this.supabaseUrl}/rest/v1/carteira_entradas?id=eq.${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: this.getHeaders()
+        });
+      } catch (err) {
+        console.warn('Falha ao excluir entrada da carteira na nuvem:', err);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Calcula o balanço da carteira unindo entradas financeiras e saídas (compras)
+   */
+  calculateWalletBalance(walletEntries = [], purchaseHistory = [], filter = {}) {
+    const targetYear = filter.year && filter.year !== 'all' ? Number(filter.year) : null;
+    const targetMonth = filter.month && filter.month !== 'all' ? Number(filter.month) : null;
+
+    // Filtra entradas
+    let filteredEntries = [...walletEntries];
+    if (targetYear) filteredEntries = filteredEntries.filter(e => Number(e.year) === targetYear);
+    if (targetMonth) filteredEntries = filteredEntries.filter(e => Number(e.month) === targetMonth);
+
+    // Filtra compras (saídas)
+    let filteredPurchases = [...purchaseHistory];
+    if (targetYear) filteredPurchases = filteredPurchases.filter(p => Number(p.year) === targetYear);
+    if (targetMonth) filteredPurchases = filteredPurchases.filter(p => Number(p.month) === targetMonth);
+
+    const totalEntradas = filteredEntries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const totalRecebido = filteredEntries
+      .filter(e => e.status === 'recebido')
+      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const totalAReceber = filteredEntries
+      .filter(e => e.status === 'a_receber')
+      .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+    const totalSaidas = filteredPurchases.reduce((s, p) => s + (Number(p.totalSpent) || 0), 0);
+    const saldoDisponivel = totalRecebido - totalSaidas;
+    const saldoProjetado = (totalRecebido + totalAReceber) - totalSaidas;
+
+    // Agrupamento por categoria de renda
+    const catMap = {};
+    filteredEntries.forEach(e => {
+      const cat = e.category || 'Outros';
+      if (!catMap[cat]) catMap[cat] = 0;
+      catMap[cat] += Number(e.amount) || 0;
+    });
+
+    return {
+      totalEntradas,
+      totalRecebido,
+      totalAReceber,
+      totalSaidas,
+      saldoDisponivel,
+      saldoProjetado,
+      entriesCount: filteredEntries.length,
+      purchasesCount: filteredPurchases.length,
+      byCategory: catMap,
+      filteredEntries,
+      filteredPurchases
+    };
+  }
+
+  // ==========================================================
+  // LISTAS COMPARTILHADAS (MODO ABERTO VS FECHADO)
+  // ==========================================================
+
+  /**
+   * Gera um código de convite amigável de 6 caracteres (ex: LST-8492)
+   */
+  generateInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = 'LST-';
+    for (let i = 0; i < 5; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  /**
+   * Compartilha uma lista com um e-mail de usuário
+   */
+  async shareListWithEmail(listId, email, permission = 'fechado') {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado para compartilhar listas.');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('E-mail inválido.');
+    }
+
+    const inviteCode = this.generateInviteCode();
+    const shareRecord = {
+      id: 'share_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now(),
+      lista_id: listId,
+      owner_id: this.user.id,
+      shared_with_email: cleanEmail,
+      permission: permission === 'aberto' ? 'aberto' : 'fechado',
+      invite_code: inviteCode,
+      created_at: new Date().toISOString()
+    };
+
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos`, {
+        method: 'POST',
+        headers: {
+          ...this.getHeaders(),
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(shareRecord)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Falha ao salvar compartilhamento na nuvem.');
+      }
+    }
+
+    return shareRecord;
+  }
+
+  /**
+   * Cria um link/código de compartilhamento aberto para envio via WhatsApp
+   */
+  async createShareInviteCode(listId, permission = 'fechado') {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa estar autenticado.');
+    }
+
+    const inviteCode = this.generateInviteCode();
+    const shareRecord = {
+      id: 'share_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now(),
+      lista_id: listId,
+      owner_id: this.user.id,
+      shared_with_email: 'convite_link@comprasplus.app',
+      permission: permission === 'aberto' ? 'aberto' : 'fechado',
+      invite_code: inviteCode,
+      created_at: new Date().toISOString()
+    };
+
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos`, {
+        method: 'POST',
+        headers: {
+          ...this.getHeaders(),
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(shareRecord)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Falha ao criar convite.');
+      }
+    }
+
+    return {
+      inviteCode,
+      permission,
+      shareLink: `${window.location.origin}${window.location.pathname}?convite=${encodeURIComponent(inviteCode)}`
+    };
+  }
+
+  /**
+   * Conecta o usuário atual a uma lista compartilhada pelo código de convite
+   */
+  async joinSharedListByCode(inviteCode) {
+    if (!this.isAuthenticated()) {
+      throw new Error('Você precisa fazer login para acessar uma lista compartilhada.');
+    }
+
+    const cleanCode = (inviteCode || '').trim().toUpperCase();
+    if (!cleanCode) throw new Error('Código de convite inválido.');
+
+    if (!this.supabaseUrl || !this.supabaseKey || !this.accessToken) {
+      throw new Error('Conexão com a nuvem indisponível no momento.');
+    }
+
+    // 1. Busca o compartilhamento
+    const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?invite_code=eq.${encodeURIComponent(cleanCode)}&select=*`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    });
+
+    if (!res.ok) throw new Error('Falha ao buscar convite de compartilhamento.');
+    const shares = await res.json();
+    if (!shares || shares.length === 0) {
+      throw new Error('Código de convite não encontrado ou expirado.');
+    }
+
+    const share = shares[0];
+
+    // Se o usuário atual for o próprio dono
+    if (share.owner_id === this.user.id) {
+      const ownerList = await this.getListById(share.lista_id);
+      return { list: ownerList, permission: 'owner', isOwner: true };
+    }
+
+    // Vincula o usuário atual ao compartilhamento
+    try {
+      await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?id=eq.${share.id}`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          shared_with_user_id: this.user.id,
+          shared_with_email: this.user.email
+        })
+      });
+    } catch (_) {}
+
+    // 2. Busca a lista compartilhada
+    const listRes = await fetch(`${this.supabaseUrl}/rest/v1/listas?id=eq.${share.lista_id}&select=*`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    });
+
+    if (!listRes.ok) throw new Error('Não foi possível carregar a lista associada a este convite.');
+    const listData = await listRes.json();
+    if (!listData || listData.length === 0) throw new Error('A lista compartilhada não existe mais.');
+
+    const row = listData[0];
+    const joinedList = {
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      category: row.category,
+      budget: Number(row.budget) || 0,
+      items: Array.isArray(row.items) ? row.items : [],
+      createdAt: row.created_at || new Date().toISOString(),
+      isShared: true,
+      permission: share.permission
+    };
+
+    // Salva no cache local
+    await this.saveLocalList(joinedList);
+
+    return {
+      list: joinedList,
+      permission: share.permission,
+      isOwner: false
+    };
+  }
+
+  /**
+   * Obtém a lista de colaboradores de uma lista
+   */
+  async getListCollaborators(listId) {
+    if (!this.isAuthenticated() || !this.supabaseUrl) return [];
+
+    try {
+      const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?lista_id=eq.${listId}&select=*`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+      if (res.ok) return await res.json();
+    } catch (_) {}
+    return [];
+  }
+
+  /**
+   * Remove um colaborador
+   */
+  async removeCollaborator(shareId) {
+    if (!this.isAuthenticated() || !this.supabaseUrl) return false;
+
+    try {
+      const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?id=eq.${shareId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders()
+      });
+      return res.ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Retorna a permissão do usuário atual para a lista ('owner', 'aberto', 'fechado')
+   */
+  getListPermission(list) {
+    if (!list) return 'fechado';
+    if (!this.user) return 'fechado';
+    if (list.userId === this.user.id || list.user_id === this.user.id) return 'owner';
+    if (this.isAdmin()) return 'owner';
+    if (list.permission) return list.permission;
+    return 'fechado';
+  }
 }
 
 // Exporta instância do banco
 const db = new Database();
+

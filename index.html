@@ -29,50 +29,196 @@
 <body>
   <div class="mobile-app-container">
     
-    <!-- Header Superior Mobile -->
-    <header class="mobile-header">
-      <div class="brand-wrapper">
-        <img src="icons/icon-192.png" alt="Compras Plus" class="brand-logo-img">
-        <div class="brand-text">
-          <h1>Compras Plus</h1>
-          <p>Orçamento & Saldo em Tempo Real</p>
+    <!-- ========================================================== -->
+    <!-- TELA 0: PÁGINA DE LOGIN INICIAL (LANDING & AUTENTICAÇÃO)   -->
+    <!-- ========================================================== -->
+    <div id="view-login-inicial" class="auth-initial-page hidden">
+      <div class="auth-initial-card">
+        <!-- Logo & Apresentação -->
+        <div class="auth-initial-brand">
+          <div class="auth-brand-badge-icon">🛍️</div>
+          <h2>Compras Plus</h2>
+          <p class="auth-brand-tagline">Planejador de Mercado & Carteira Financeira</p>
+        </div>
+
+        <!-- Seletor de Abas: Entrar vs Criar Conta -->
+        <div class="auth-initial-tabs">
+          <button type="button" class="auth-tab-choice active" id="btn-tab-choice-login">
+            🔑 Entrar
+          </button>
+          <button type="button" class="auth-tab-choice" id="btn-tab-choice-signup">
+            ✨ Criar Conta
+          </button>
+        </div>
+
+        <!-- Alerta de Mensagem -->
+        <div id="auth-initial-alert" class="auth-alert hidden"></div>
+
+        <!-- Formulário: ENTRAR -->
+        <form id="form-initial-login" class="auth-form-block">
+          <div class="form-group-mobile">
+            <label for="initial-login-email">Seu E-mail *</label>
+            <input type="email" id="initial-login-email" placeholder="seu@email.com" required autocomplete="email">
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="initial-login-password">Sua Senha *</label>
+            <div class="password-input-wrapper">
+              <input type="password" id="initial-login-password" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-password" data-target="initial-login-password" title="Ver senha">👁️</button>
+            </div>
+          </div>
+
+          <div class="auth-remember-row">
+            <label class="checkbox-remember-label">
+              <input type="checkbox" id="initial-login-remember" checked>
+              <span>Permanecer conectado</span>
+            </label>
+            <button type="button" id="btn-initial-forgot-pass" class="link-forgot-pass">
+              Esqueci a senha
+            </button>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btn-initial-login-submit">
+            🚀 Entrar no Aplicativo
+          </button>
+        </form>
+
+        <!-- Formulário: CRIAR CONTA (COM CAPTURA DE WHATSAPP PARA LEADS) -->
+        <form id="form-initial-signup" class="auth-form-block hidden">
+          <div class="form-group-mobile">
+            <label for="initial-signup-name">Nome Completo *</label>
+            <input type="text" id="initial-signup-name" placeholder="Como quer ser chamado?" required autocomplete="name">
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="initial-signup-email">Seu E-mail *</label>
+            <input type="email" id="initial-signup-email" placeholder="seu@email.com" required autocomplete="email">
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="initial-signup-phone">WhatsApp / Telefone *</label>
+            <input type="tel" id="initial-signup-phone" placeholder="(11) 99999-9999" required autocomplete="tel">
+            <small class="field-tip">Receba avisos de economia e controle financeiro.</small>
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="initial-signup-password">Crie uma Senha *</label>
+            <div class="password-input-wrapper">
+              <input type="password" id="initial-signup-password" placeholder="Mínimo 6 caracteres" minlength="6" required autocomplete="new-password">
+              <button type="button" class="btn-toggle-password" data-target="initial-signup-password" title="Ver senha">👁️</button>
+            </div>
+          </div>
+
+          <div class="auth-marketing-consent-box">
+            <label class="checkbox-consent-label">
+              <input type="checkbox" id="initial-signup-marketing" checked>
+              <span>Aceito receber novidades e dicas de economia via WhatsApp.</span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-auth-submit" id="btn-initial-signup-submit">
+            ✨ Criar Minha Conta Grátis
+          </button>
+        </form>
+
+        <!-- Bloco de Recuperação de Senha -->
+        <div id="block-initial-recovery" class="auth-form-block hidden">
+          <h4 style="margin-bottom: 0.35rem; font-size: 1rem;">Recuperar Acesso</h4>
+          <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Informe seu e-mail cadastrado para receber o link de redefinição de senha.
+          </p>
+          <div class="form-group-mobile">
+            <label for="initial-recovery-email">Seu E-mail Cadastrado</label>
+            <input type="email" id="initial-recovery-email" placeholder="seu@email.com">
+          </div>
+          <button type="button" id="btn-initial-send-recovery" class="btn btn-primary" style="width: 100%;">
+            ✉️ Enviar Link de Recuperação
+          </button>
+          <button type="button" id="btn-initial-back-to-login" class="btn btn-outline" style="width: 100%; margin-top: 0.5rem;">
+            ← Voltar para o Login
+          </button>
+        </div>
+
+        <div class="auth-initial-footer">
+          <span>🔒 Listas e carteira 100% protegidas e criptografadas.</span>
         </div>
       </div>
-      <div class="header-actions">
-        <!-- Botão Conta SaaS / Perfil -->
-        <button id="btn-header-auth" class="btn btn-user-auth-badge" title="Minha Conta">
-          <span id="header-auth-icon">👤</span>
-          <span id="header-auth-label">Entrar</span>
-        </button>
-        <!-- Botão Instalar App (PWA) -->
-        <button id="btn-instalar-app" class="btn btn-install-badge hidden" title="Instalar aplicativo">
-          📲 Instalar
-        </button>
-        <!-- Botão de Configurações / Banco de Dados (Exclusivo para Administrador) -->
-        <button id="btn-abrir-config" class="btn btn-outline btn-icon-only hidden" title="Configurações do Banco de Dados">
-          ⚙️
-        </button>
-      </div>
-    </header>
+    </div>
 
-    <!-- Navegação Principal Mobile: Listas vs Histórico & Balanço -->
-    <nav class="app-tab-nav" id="app-main-nav">
-      <button type="button" class="app-nav-tab active" id="tab-nav-listas" data-target="view-dashboard">
-        <span class="nav-tab-icon">🛒</span>
-        <span class="nav-tab-label">Minhas Listas</span>
-      </button>
-      <button type="button" class="app-nav-tab" id="tab-nav-historico" data-target="view-historico">
-        <span class="nav-tab-icon">📊</span>
-        <span class="nav-tab-label">Histórico & Balanço</span>
-      </button>
-    </nav>
+    <!-- WRAPPER DO APLICATIVO AUTENTICADO -->
+    <div id="main-app-shell" class="main-app-shell">
 
-    <!-- TELA 1: DASHBOARD DE LISTAS (VISÃO GERAL) -->
-    <main id="view-dashboard" class="view">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
-        <h2 style="font-size: 1.15rem; font-weight: 700;">Minhas Listas</h2>
-        <span id="total-listas-badge" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">0 listas</span>
-      </div>
+      <!-- Header Superior Mobile -->
+      <header class="mobile-header">
+        <div class="brand-wrapper">
+          <img src="icons/icon-192.png" alt="Compras Plus" class="brand-logo-img">
+          <div class="brand-text">
+            <h1>Compras Plus</h1>
+            <p>Orçamento & Saldo em Tempo Real</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <!-- Botão Sair da Conta no Header -->
+          <button id="btn-header-logout" class="btn btn-danger-icon-sm" title="Sair da Conta (Logout)">
+            🚪
+          </button>
+          <!-- Botão Conta SaaS / Perfil -->
+          <button id="btn-header-auth" class="btn btn-user-auth-badge" title="Meu Perfil">
+            <span id="header-auth-icon">👤</span>
+            <span id="header-auth-label">Entrar</span>
+          </button>
+          <!-- Botão Instalar App (PWA) -->
+          <button id="btn-instalar-app" class="btn btn-install-badge hidden" title="Instalar aplicativo">
+            📲 Instalar
+          </button>
+          <!-- Botão de Configurações (Exclusivo para Administrador) -->
+          <button id="btn-abrir-config" class="btn btn-outline btn-icon-only hidden" title="Configurações do Banco de Dados">
+            ⚙️
+          </button>
+        </div>
+      </header>
+
+      <!-- Navegação Principal Mobile: Listas, Carteira, Histórico, Perfil e Admin -->
+      <nav class="app-tab-nav" id="app-main-nav">
+        <button type="button" class="app-nav-tab active" id="tab-nav-listas" data-target="view-dashboard">
+          <span class="nav-tab-icon">🛒</span>
+          <span class="nav-tab-label">Listas</span>
+        </button>
+        <button type="button" class="app-nav-tab" id="tab-nav-carteira" data-target="view-carteira">
+          <span class="nav-tab-icon">💰</span>
+          <span class="nav-tab-label">Carteira</span>
+        </button>
+        <button type="button" class="app-nav-tab" id="tab-nav-historico" data-target="view-historico">
+          <span class="nav-tab-icon">📊</span>
+          <span class="nav-tab-label">Histórico</span>
+        </button>
+        <button type="button" class="app-nav-tab" id="tab-nav-perfil" data-target="view-perfil">
+          <span class="nav-tab-icon">👤</span>
+          <span class="nav-tab-label">Perfil</span>
+        </button>
+        <button type="button" class="app-nav-tab hidden" id="tab-nav-admin" data-target="view-admin">
+          <span class="nav-tab-icon">🛡️</span>
+          <span class="nav-tab-label">Admin</span>
+        </button>
+      </nav>
+
+      <!-- TELA 1: DASHBOARD DE LISTAS (VISÃO GERAL) -->
+      <main id="view-dashboard" class="view">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+          <h2 style="font-size: 1.15rem; font-weight: 700;">Minhas Listas</h2>
+          <span id="total-listas-badge" style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted);">0 listas</span>
+        </div>
+
+        <!-- Barra de Ações Rápidas: Nova Lista & Entrar por Código -->
+        <div class="dashboard-quick-actions">
+          <button type="button" id="btn-dashboard-nova-lista" class="btn btn-primary btn-sm" style="flex: 1;">
+            + Nova Lista
+          </button>
+          <button type="button" id="btn-dashboard-entrar-convite" class="btn btn-outline btn-sm" style="flex: 1;" title="Acessar lista compartilhada com código">
+            🔗 Entrar via Convite
+          </button>
+        </div>
 
       <!-- Lista de Cards das Listas -->
       <div id="listas-container" class="listas-list-mobile">
@@ -104,19 +250,28 @@
     <!-- TELA 2: DETALHE DA LISTA DE COMPRAS -->
     <main id="view-lista-detalhe" class="view hidden">
       <!-- Barra Superior de Navegação -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; gap: 0.4rem; flex-wrap: wrap;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem; gap: 0.4rem; flex-wrap: wrap;">
         <button id="btn-voltar-dashboard" class="btn btn-secondary btn-sm">
           ← Voltar
         </button>
-        <div style="display: flex; gap: 0.4rem; align-items: center;">
-          <button id="btn-abrir-finalizar-compra" class="btn btn-finish-sm" title="Finalizar compra e gravar no histórico">
-            🏁 Concluir Compra
+        <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+          <button id="btn-detalhe-compartilhar" class="btn btn-outline btn-sm" title="Compartilhar com outro usuário">
+            👥 Compartilhar
           </button>
-          <button id="btn-compartilhar-whatsapp" class="btn btn-whatsapp-sm" title="Compartilhar lista no WhatsApp">
+          <button id="btn-abrir-finalizar-compra" class="btn btn-finish-sm" title="Finalizar compra e gravar no histórico">
+            🏁 Concluir
+          </button>
+          <button id="btn-compartilhar-whatsapp" class="btn btn-whatsapp-sm" title="Compartilhar no WhatsApp">
             📲 WhatsApp
           </button>
           <span id="detalhe-categoria-tag" class="budget-tag">🛒 Supermercado</span>
         </div>
+      </div>
+
+      <!-- Banner Informativo de Lista Compartilhada / Modo Fechado -->
+      <div id="detalhe-shared-banner" class="shared-mode-banner hidden">
+        <span id="shared-banner-icon">🔒</span>
+        <div id="shared-banner-text">Modo Fechado: Somente Leitura.</div>
       </div>
 
       <!-- Card do Painel Financeiro da Lista -->
@@ -317,8 +472,257 @@
       </section>
     </main>
 
+    <!-- ========================================================== -->
+    <!-- TELA 4: CARTEIRA FINANCEIRA (ENTRADAS, SALÁRIO E SALDO)    -->
+    <!-- ========================================================== -->
+    <main id="view-carteira" class="view hidden">
+      <!-- Cabeçalho da Carteira -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+        <div>
+          <h2 style="font-size: 1.15rem; font-weight: 700; margin: 0;">Minha Carteira</h2>
+          <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Entradas, saídas do mercado e saldo real</p>
+        </div>
+        <button type="button" id="btn-abrir-nova-entrada" class="btn btn-primary btn-sm" title="Adicionar nova renda ou salário">
+          + Nova Renda
+        </button>
+      </div>
+
+      <!-- Filtros da Carteira: Ano e Mês -->
+      <section class="carteira-filters-card">
+        <div class="filters-row-grid">
+          <div class="filter-field">
+            <label for="filtro-carteira-ano">Ano</label>
+            <select id="filtro-carteira-ano">
+              <!-- Preenchido dinamicamente -->
+            </select>
+          </div>
+          <div class="filter-field" style="flex: 2;">
+            <label for="filtro-carteira-mes">Mês de Referência</label>
+            <select id="filtro-carteira-mes">
+              <option value="all">📅 Todos os Meses</option>
+              <option value="1">Janeiro</option>
+              <option value="2">Fevereiro</option>
+              <option value="3">Março</option>
+              <option value="4">Abril</option>
+              <option value="5">Maio</option>
+              <option value="6">Junho</option>
+              <option value="7">Julho</option>
+              <option value="8">Agosto</option>
+              <option value="9">Setembro</option>
+              <option value="10">Outubro</option>
+              <option value="11">Novembro</option>
+              <option value="12">Dezembro</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 Grandes Cards de Balanço da Carteira -->
+      <section class="carteira-cards-grid">
+        <!-- Entradas Totais -->
+        <div class="carteira-card card-entradas">
+          <div class="carteira-card-header">
+            <span class="carteira-icon-pill">🟢</span>
+            <span class="carteira-card-lbl">Total Entradas</span>
+          </div>
+          <span class="carteira-card-val" id="carteira-total-entradas">R$ 0,00</span>
+          <span class="carteira-card-sub" id="carteira-entradas-count">0 registros</span>
+        </div>
+
+        <!-- Saídas Totais (Compras de Mercado) -->
+        <div class="carteira-card card-saidas">
+          <div class="carteira-card-header">
+            <span class="carteira-icon-pill">🔴</span>
+            <span class="carteira-card-lbl">Total Saídas (Mercado)</span>
+          </div>
+          <span class="carteira-card-val" id="carteira-total-saidas">R$ 0,00</span>
+          <span class="carteira-card-sub" id="carteira-saidas-count">0 compras registradas</span>
+        </div>
+
+        <!-- Saldo Líquido em Carteira -->
+        <div class="carteira-card card-saldo full-width">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div class="carteira-card-header">
+                <span class="carteira-icon-pill">💎</span>
+                <span class="carteira-card-lbl">Saldo da Carteira</span>
+              </div>
+              <span class="carteira-card-val" id="carteira-saldo-carteira">R$ 0,00</span>
+            </div>
+            <span class="carteira-status-badge badge-green" id="carteira-saldo-badge">Saldo Positivo</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Resumo Detalhado de Rendas -->
+      <section class="carteira-breakdown-bar">
+        <div class="breakdown-item">
+          <span class="breakdown-lbl">💼 Salário</span>
+          <strong class="breakdown-val" id="carteira-sum-salario">R$ 0,00</strong>
+        </div>
+        <div class="breakdown-item">
+          <span class="breakdown-lbl">⚡ Rendas Extras</span>
+          <strong class="breakdown-val" id="carteira-sum-extra">R$ 0,00</strong>
+        </div>
+        <div class="breakdown-item">
+          <span class="breakdown-lbl">⏳ A Receber</span>
+          <strong class="breakdown-val" id="carteira-sum-areceber">R$ 0,00</strong>
+        </div>
+      </section>
+
+      <!-- Lista de Rendas e Entradas Cadastradas -->
+      <section style="margin-top: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+          <h3 style="font-size: 1rem; font-weight: 700; margin: 0;">Entradas & Rendas Registradas</h3>
+          <button type="button" id="btn-recarregar-carteira" class="btn btn-outline btn-sm" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">
+            🔄 Atualizar
+          </button>
+        </div>
+
+        <div id="carteira-entries-list" class="carteira-items-container">
+          <!-- Injetado via JS -->
+        </div>
+
+        <!-- Estado Vazio da Carteira -->
+        <div id="empty-state-carteira" class="empty-state-mobile hidden" style="padding: 2rem 1rem;">
+          <div class="empty-state-icon">💵</div>
+          <h3>Nenhuma renda cadastrada</h3>
+          <p>Adicione seu salário do mês, bicos, rendas extras ou valores previstos para calcular quanto sobrará das compras.</p>
+          <button type="button" id="btn-carteira-add-first" class="btn btn-primary" style="margin-top: 0.75rem;">
+            + Adicionar Primeiro Valor
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- ========================================================== -->
+    <!-- TELA 5: PÁGINA DE PERFIL DO USUÁRIO & SAIR DA CONTA        -->
+    <!-- ========================================================== -->
+    <main id="view-perfil" class="view hidden">
+      <!-- Header do Perfil -->
+      <div class="perfil-hero-card">
+        <div class="perfil-avatar-circle" id="perfil-avatar-circle">
+          👤
+        </div>
+        <h2 id="perfil-view-name" style="font-size: 1.25rem; font-weight: 800; margin: 0.5rem 0 0.15rem;">Nome do Usuário</h2>
+        <span id="perfil-view-email" style="font-size: 0.8rem; color: var(--text-muted);">email@exemplo.com</span>
+        <div class="perfil-status-badge" style="margin-top: 0.5rem;">
+          <span class="status-indicator-dot"></span>
+          <span>SaaS Conectado • Nuvem Ativa</span>
+        </div>
+      </div>
+
+      <!-- Card: Editar Dados do Perfil -->
+      <section class="perfil-section-card">
+        <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem;">👤 Meus Dados</h3>
+        <form id="form-editar-perfil">
+          <div class="form-group-mobile">
+            <label for="perfil-input-name">Nome Completo</label>
+            <input type="text" id="perfil-input-name" placeholder="Seu nome" required>
+          </div>
+          <div class="form-group-mobile">
+            <label for="perfil-input-phone">WhatsApp / Telefone</label>
+            <input type="tel" id="perfil-input-phone" placeholder="(11) 99999-9999">
+            <small class="field-tip">Usado para receber alertas e novidades de economia.</small>
+          </div>
+          <button type="submit" class="btn btn-primary" id="btn-salvar-perfil" style="width: 100%; margin-top: 0.5rem;">
+            💾 Salvar Alterações
+          </button>
+        </form>
+      </section>
+
+      <!-- Card: Ações & Painel Administrativo -->
+      <section class="perfil-section-card">
+        <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem;">⚡ Ações Rápidas</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+          <button type="button" id="btn-perfil-sync" class="btn btn-outline" style="width: 100%;">
+            🔄 Sincronizar Tudo com a Nuvem
+          </button>
+          <button type="button" id="btn-perfil-admin-link" class="btn btn-admin-primary hidden" style="width: 100%;">
+            🛡️ Acessar Painel de Administração
+          </button>
+        </div>
+      </section>
+
+      <!-- Card: Sair da Conta (Logout) -->
+      <section class="perfil-section-card" style="border-color: rgba(239, 68, 68, 0.25);">
+        <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; color: #ef4444;">🚪 Encerrar Sessão</h3>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+          Ao sair, suas listas permanecem seguras na nuvem e você voltará à tela inicial de login.
+        </p>
+        <button type="button" id="btn-perfil-logout" class="btn btn-danger" style="width: 100%; font-weight: 700;">
+          🚪 Sair da Conta (Logout)
+        </button>
+      </section>
+    </main>
+
+    <!-- ========================================================== -->
+    <!-- TELA 6: PÁGINA ADMINISTRATIVA SAAS                         -->
+    <!-- ========================================================== -->
+    <main id="view-admin" class="view hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+        <div>
+          <button type="button" id="btn-admin-voltar-app" class="btn btn-secondary btn-sm" style="margin-bottom: 0.35rem;">
+            ← Voltar ao App
+          </button>
+          <h2 style="font-size: 1.15rem; font-weight: 800; margin: 0;">🛡️ Painel do Administrador</h2>
+          <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Gestor Master: viniciuscirne@gmail.com</p>
+        </div>
+      </div>
+
+      <!-- Grade de Métricas Gerais -->
+      <div class="admin-metrics-grid">
+        <div class="admin-metric-card">
+          <span class="admin-metric-val" id="admin-stat-leads-val">0</span>
+          <span class="admin-metric-lbl">👥 Leads Totais</span>
+        </div>
+        <div class="admin-metric-card">
+          <span class="admin-metric-val" id="admin-stat-whatsapp-val">0</span>
+          <span class="admin-metric-lbl">📲 Com WhatsApp</span>
+        </div>
+        <div class="admin-metric-card">
+          <span class="admin-metric-val" id="admin-stat-listas-val">0</span>
+          <span class="admin-metric-lbl">🛒 Listas SaaS</span>
+        </div>
+      </div>
+
+      <!-- Barra de Ações Rápidas -->
+      <div class="admin-toolbar">
+        <button type="button" id="btn-admin-download-csv" class="btn-admin-action-green">
+          <span>📥</span>
+          <span>Exportar Leads (.CSV)</span>
+        </button>
+        <button type="button" id="btn-admin-refresh-data" class="btn btn-outline btn-sm" style="min-height: 38px;">
+          🔄 Atualizar
+        </button>
+        <button type="button" id="btn-admin-open-db-config" class="btn btn-outline btn-sm" style="min-height: 38px;" title="Configurações do Banco">
+          ⚙️ Banco
+        </button>
+      </div>
+
+      <!-- Campo de Busca de Leads -->
+      <div class="admin-search-wrapper">
+        <input type="text" id="admin-input-search-leads" placeholder="🔍 Buscar por nome, e-mail ou WhatsApp..." autocomplete="off">
+      </div>
+
+      <!-- Lista de Leads de Usuários -->
+      <div class="admin-leads-scroll-area">
+        <div id="admin-page-leads-loading" class="admin-leads-loading">
+          <div class="admin-spinner"></div>
+          <span>Carregando leads do Supabase...</span>
+        </div>
+        <div id="admin-page-leads-container" class="admin-leads-container hidden">
+          <!-- Injetado dinamicamente via JS -->
+        </div>
+        <div id="admin-page-leads-empty" class="empty-state-mobile hidden" style="padding: 1.5rem 0.5rem;">
+          <p style="font-size: 0.9rem; color: var(--text-muted);">Nenhum lead encontrado com esse termo de busca.</p>
+        </div>
+      </div>
+    </main>
+
     <!-- FLOATING ACTION BUTTON (FAB) - NOVO ITEM OU NOVA LISTA -->
     <button id="fab-action-btn" class="fab-btn" title="Adicionar">+</button>
+    </div> <!-- /main-app-shell -->
 
     <!-- BOTTOM SHEET: ADICIONAR MERCADORIA (OTIMIZADO PARA POLEGAR) -->
     <div id="sheet-novo-produto" class="bottom-sheet-backdrop hidden">
@@ -784,8 +1188,154 @@
           </div>
         </div>
       </div>
+    <!-- BOTTOM SHEET: NOVA ENTRADA NA CARTEIRA -->
+    <div id="sheet-nova-entrada" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>+ Adicionar Renda / Entrada</h3>
+          <button type="button" id="btn-fechar-sheet-entrada" class="btn btn-outline btn-sm">✕</button>
+        </div>
+
+        <form id="form-nova-entrada">
+          <div class="form-group-mobile">
+            <label for="entrada-descricao">Descrição da Renda *</label>
+            <input type="text" id="entrada-descricao" placeholder="Ex: Salário Empresa, Venda Bolo, Bico..." required autocomplete="off">
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="entrada-valor">Valor (R$) *</label>
+            <input type="number" id="entrada-valor" min="0.01" step="0.01" placeholder="0,00" required>
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="entrada-categoria">Categoria *</label>
+            <select id="entrada-categoria" required>
+              <option value="Salário">💼 Salário / Pagamento Principal</option>
+              <option value="Renda Extra">⚡ Renda Extra / Freelance</option>
+              <option value="Investimentos">📈 Rendimentos / Investimentos</option>
+              <option value="Presente">🎁 Presente / Doação</option>
+              <option value="Outros">💵 Outras Entradas</option>
+            </select>
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="entrada-status">Status do Valor *</label>
+            <select id="entrada-status" required>
+              <option value="recebido">✅ Já Recebido (Caiu na Conta / Mão)</option>
+              <option value="a_receber">⏳ A Receber (Previsão / A Cair)</option>
+            </select>
+          </div>
+
+          <div class="form-group-mobile">
+            <label for="entrada-data">Data de Recebimento</label>
+            <input type="date" id="entrada-data" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="btn-salvar-entrada-submit" style="width: 100%; margin-top: 0.5rem;">
+            💾 Gravar na Carteira
+          </button>
+        </form>
+      </div>
     </div>
 
+    <!-- BOTTOM SHEET: COMPARTILHAR LISTA (ABERTO VS FECHADO) -->
+    <div id="sheet-compartilhar-lista" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content" style="max-height: 90vh; overflow-y: auto;">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <div>
+            <h3 style="margin: 0;">👥 Compartilhar Lista</h3>
+            <small style="color: var(--text-muted); font-size: 0.72rem;" id="compartilhar-nome-lista">Nome da Lista</small>
+          </div>
+          <button type="button" id="btn-fechar-sheet-compartilhar" class="btn btn-outline btn-sm">✕</button>
+        </div>
+
+        <!-- Seletor de Modo de Permissão (Visual e Intuitivo) -->
+        <div class="share-permission-selector">
+          <label style="font-size: 0.82rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.4rem; display: block;">
+            Escolha o Modo de Compartilhamento:
+          </label>
+          <div class="share-mode-options">
+            <label class="share-mode-card active" id="label-mode-aberto">
+              <input type="radio" name="share-permission" value="aberto" checked>
+              <div class="share-mode-info">
+                <strong>🟢 Modo Aberto (Colaborativo)</strong>
+                <p>O convidado pode adicionar mercadorias, editar e marcar compras.</p>
+              </div>
+            </label>
+            <label class="share-mode-card" id="label-mode-fechado">
+              <input type="radio" name="share-permission" value="fechado">
+              <div class="share-mode-info">
+                <strong>🔒 Modo Fechado (Somente Leitura)</strong>
+                <p>O convidado apenas visualiza os itens e gastos em tempo real, sem permissão de alterar.</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Opção 1: Enviar por E-mail -->
+        <div class="share-action-card">
+          <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.5rem;">Convidar por E-mail</h4>
+          <form id="form-compartilhar-email" style="display: flex; gap: 0.4rem;">
+            <input type="email" id="share-input-email" placeholder="email-do-amigo@gmail.com" required style="flex: 1; min-height: 38px;">
+            <button type="submit" class="btn btn-primary btn-sm" id="btn-submit-share-email" style="min-height: 38px;">
+              Enviar
+            </button>
+          </form>
+        </div>
+
+        <!-- Opção 2: Código / Link de Acesso Rápido -->
+        <div class="share-action-card">
+          <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.35rem;">Código & Link para WhatsApp</h4>
+          <p style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+            Qualquer pessoa com sua permissão pode usar esse código para acessar a lista.
+          </p>
+          <div class="share-code-box">
+            <span class="share-code-display" id="share-display-code">LST-.....</span>
+            <div style="display: flex; gap: 0.4rem;">
+              <button type="button" id="btn-copiar-codigo-share" class="btn btn-outline btn-sm">
+                📋 Copiar Código
+              </button>
+              <button type="button" id="btn-enviar-link-whatsapp" class="btn btn-whatsapp-sm btn-sm">
+                📲 WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista de Colaboradores Existentes -->
+        <div style="margin-top: 1rem;">
+          <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.45rem;">Pessoas com Acesso</h4>
+          <div id="share-collaborators-list" class="collaborators-list">
+            <!-- Injetado via JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM SHEET: ENTRAR EM LISTA COMPARTILHADA VIA CÓDIGO -->
+    <div id="sheet-entrar-lista-codigo" class="bottom-sheet-backdrop hidden">
+      <div class="bottom-sheet-content">
+        <div class="sheet-drag-handle"></div>
+        <div class="sheet-header">
+          <h3>🔗 Acessar Lista Compartilhada</h3>
+          <button type="button" id="btn-fechar-sheet-entrar-codigo" class="btn btn-outline btn-sm">✕</button>
+        </div>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+          Cole ou digite o código de convite recebido (ex: <code>LST-8931</code>) para conectar a lista à sua conta.
+        </p>
+        <form id="form-entrar-codigo">
+          <div class="form-group-mobile">
+            <label for="input-convite-codigo">Código do Convite *</label>
+            <input type="text" id="input-convite-codigo" placeholder="LST-XXXXX" required style="text-transform: uppercase; font-weight: 700; font-size: 1.1rem; letter-spacing: 1px; text-align: center;">
+          </div>
+          <button type="submit" class="btn btn-primary" id="btn-submit-entrar-codigo" style="width: 100%; margin-top: 0.5rem;">
+            🚀 Conectar Lista
+          </button>
+        </form>
+      </div>
+    </div>
 
   </div>
 
