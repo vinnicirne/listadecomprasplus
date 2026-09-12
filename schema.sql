@@ -36,19 +36,32 @@ drop policy if exists "SaaS: Usuários criam suas próprias listas" on public.li
 drop policy if exists "SaaS: Usuários atualizam suas próprias listas" on public.listas;
 drop policy if exists "SaaS: Usuários excluem suas próprias listas" on public.listas;
 
+-- 5. Função de Checagem de Administrador (Security Definer para evitar recursão de RLS)
+create or replace function public.is_admin()
+returns boolean as $$
+begin
+  return (
+    lower(trim(coalesce(auth.jwt()->>'email', ''))) = 'viniciuscirne@gmail.com'
+    or coalesce(auth.jwt()->'user_metadata'->>'role', '') = 'admin'
+    or exists (
+      select 1 from public.user_profiles
+      where id = auth.uid() and role = 'admin'
+    )
+  );
+end;
+$$ language plpgsql security definer set search_path = public;
+
 -- 5. Políticas SaaS de Isolamento Estrito por Usuário (Autenticação Obrigatória)
 -- Remove qualquer lista órfã sem dono criada anteriormente
 delete from public.listas where user_id is null;
 
-create policy "SaaS: Usuários veem suas próprias listas" 
+drop policy if exists "SaaS: Usuários veem suas próprias listas" on public.listas;
+drop policy if exists "SaaS: Usuários veem suas próprias listas ou compartilhadas" on public.listas;
+create policy "SaaS: Usuários veem suas próprias listas ou compartilhadas" 
   on public.listas for select 
   using (
     (auth.uid() is not null and auth.uid() = user_id)
-    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
-    or exists (
-      select 1 from public.user_profiles p 
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    or public.is_admin()
   );
 
 create policy "SaaS: Usuários criam suas próprias listas" 
@@ -103,16 +116,14 @@ create policy "Usuários podem gerenciar seu próprio perfil"
   using (auth.uid() = id) 
   with check (auth.uid() = id);
 
--- Política de RLS para o Administrador visualizar todos os perfis e leads cadastrados
+-- Política de RLS para o Administrador visualizar todos os perfis e leads (SEM RECURSÃO)
 drop policy if exists "Admins podem visualizar todos os perfis" on public.user_profiles;
 create policy "Admins podem visualizar todos os perfis" 
   on public.user_profiles for select 
   using (
-    lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
-    or exists (
-      select 1 from public.user_profiles p 
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    auth.uid() = id
+    or lower(trim(coalesce(auth.jwt()->>'email', ''))) = 'viniciuscirne@gmail.com'
+    or coalesce(auth.jwt()->'user_metadata'->>'role', '') = 'admin'
   );
 
 -- 8. Trigger automática: copia Nome, Telefone, E-mail e define 'admin' para viniciuscirne@gmail.com
@@ -182,6 +193,14 @@ create table if not exists public.historico_compras (
   purchased_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Migrações: adiciona colunas caso a tabela já exista sem elas
+alter table public.historico_compras add column if not exists list_id text;
+alter table public.historico_compras add column if not exists savings numeric(12, 2) not null default 0.00;
+alter table public.historico_compras add column if not exists items jsonb not null default '[]'::jsonb;
+alter table public.historico_compras add column if not exists day integer not null default 1;
+alter table public.historico_compras add column if not exists month integer not null default 1;
+alter table public.historico_compras add column if not exists year integer not null default 2025;
+
 create index if not exists idx_historico_user_id on public.historico_compras(user_id);
 create index if not exists idx_historico_purchased_at on public.historico_compras(purchased_at desc);
 create index if not exists idx_historico_year_month on public.historico_compras(year, month);
@@ -193,11 +212,7 @@ create policy "SaaS: Usuários veem seu próprio histórico"
   on public.historico_compras for select 
   using (
     (auth.uid() is not null and auth.uid() = user_id)
-    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
-    or exists (
-      select 1 from public.user_profiles p 
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    or public.is_admin()
   );
 
 drop policy if exists "SaaS: Usuários criam seu próprio histórico" on public.historico_compras;
@@ -211,7 +226,8 @@ drop policy if exists "SaaS: Usuários excluem seu próprio histórico" on publi
 create policy "SaaS: Usuários excluem seu próprio histórico" 
   on public.historico_compras for delete 
   using (
-    auth.uid() is not null and auth.uid() = user_id
+    (auth.uid() is not null and auth.uid() = user_id)
+    or public.is_admin()
   );
 
 -- Habilitar Realtime para historico_compras
@@ -242,6 +258,13 @@ create table if not exists public.carteira_entradas (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Migrações: adiciona colunas caso a tabela já exista sem elas
+alter table public.carteira_entradas add column if not exists status text not null default 'recebido';
+alter table public.carteira_entradas add column if not exists entry_date date not null default current_date;
+alter table public.carteira_entradas add column if not exists day integer not null default 1;
+alter table public.carteira_entradas add column if not exists month integer not null default 1;
+alter table public.carteira_entradas add column if not exists year integer not null default 2025;
+
 create index if not exists idx_carteira_user_id on public.carteira_entradas(user_id);
 create index if not exists idx_carteira_date on public.carteira_entradas(entry_date desc);
 create index if not exists idx_carteira_year_month on public.carteira_entradas(year, month);
@@ -253,11 +276,7 @@ create policy "SaaS: Usuários veem suas próprias entradas da carteira"
   on public.carteira_entradas for select 
   using (
     (auth.uid() is not null and auth.uid() = user_id)
-    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
-    or exists (
-      select 1 from public.user_profiles p 
-      where p.id = auth.uid() and p.role = 'admin'
-    )
+    or public.is_admin()
   );
 
 drop policy if exists "SaaS: Usuários criam suas entradas da carteira" on public.carteira_entradas;
@@ -306,6 +325,29 @@ create table if not exists public.lista_compartilhamentos (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Migrações: adiciona colunas caso a tabela já exista sem elas
+-- lista_id: adicionada como nullable primeiro para não quebrar linhas existentes
+alter table public.lista_compartilhamentos add column if not exists lista_id text references public.listas(id) on delete cascade;
+alter table public.lista_compartilhamentos add column if not exists shared_with_user_id uuid references auth.users(id) on delete cascade;
+alter table public.lista_compartilhamentos add column if not exists permission text not null default 'fechado';
+alter table public.lista_compartilhamentos add column if not exists invite_code text;
+
+-- Adiciona constraint de check em permission se ainda não existir (ignora erro se já existe)
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'lista_compartilhamentos_permission_check'
+  ) then
+    alter table public.lista_compartilhamentos
+      add constraint lista_compartilhamentos_permission_check
+      check (permission in ('aberto', 'fechado'));
+  end if;
+end $$;
+
+-- Índice único para invite_code (idempotente)
+create unique index if not exists idx_compartilhamentos_invite_code_unique on public.lista_compartilhamentos(invite_code) where invite_code is not null;
+
 create index if not exists idx_compartilhamentos_lista on public.lista_compartilhamentos(lista_id);
 create index if not exists idx_compartilhamentos_target_user on public.lista_compartilhamentos(shared_with_user_id);
 create index if not exists idx_compartilhamentos_target_email on public.lista_compartilhamentos(lower(trim(shared_with_email)));
@@ -315,27 +357,49 @@ alter table public.lista_compartilhamentos enable row level security;
 
 -- Políticas de RLS para compartilhamento
 drop policy if exists "SaaS: Usuários veem compartilhamentos onde são dono ou convidados" on public.lista_compartilhamentos;
-create policy "SaaS: Usuários veem compartilhamentos onde são dono ou convidados" 
+drop policy if exists "SaaS: Usuários veem compartilhamentos onde são dono ou convidados ou por convite" on public.lista_compartilhamentos;
+drop policy if exists "Anon: Leitura de convite por código" on public.lista_compartilhamentos;
+
+-- Política para usuários autenticados
+create policy "SaaS: Usuários veem compartilhamentos onde são dono ou convidados ou por convite" 
   on public.lista_compartilhamentos for select 
   using (
     auth.uid() = owner_id 
     or auth.uid() = shared_with_user_id 
-    or lower(trim(shared_with_email)) = lower(trim(auth.jwt()->>'email'))
-    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or lower(trim(shared_with_email)) = lower(trim(coalesce(auth.jwt()->>'email', '')))
+    or (invite_code is not null and length(invite_code) > 0)
+    or public.is_admin()
   );
 
+-- Política separada para role anon: permite lookup de convite por código (necessário para resolução pré-login)
+create policy "Anon: Leitura de convite por código"
+  on public.lista_compartilhamentos for select
+  to anon
+  using (invite_code is not null and length(invite_code) > 0);
+
+
 drop policy if exists "SaaS: Dono cria compartilhamentos de sua lista" on public.lista_compartilhamentos;
-create policy "SaaS: Dono cria compartilhamentos de sua lista" 
+drop policy if exists "SaaS: Dono ou convidado cria compartilhamento" on public.lista_compartilhamentos;
+create policy "SaaS: Dono ou convidado cria compartilhamento" 
   on public.lista_compartilhamentos for insert 
   with check (
-    auth.uid() = owner_id
+    auth.uid() = owner_id 
+    or auth.uid() = shared_with_user_id
   );
 
 drop policy if exists "SaaS: Dono atualiza compartilhamentos de sua lista" on public.lista_compartilhamentos;
-create policy "SaaS: Dono atualiza compartilhamentos de sua lista" 
+drop policy if exists "SaaS: Dono ou convidado por código atualiza compartilhamento" on public.lista_compartilhamentos;
+create policy "SaaS: Dono ou convidado por código atualiza compartilhamento" 
   on public.lista_compartilhamentos for update 
   using (
-    auth.uid() = owner_id
+    auth.uid() = owner_id 
+    or (invite_code is not null and (shared_with_user_id is null or shared_with_user_id = auth.uid()))
+    or public.is_admin()
+  )
+  with check (
+    auth.uid() = owner_id 
+    or (invite_code is not null and (shared_with_user_id is null or shared_with_user_id = auth.uid()))
+    or public.is_admin()
   );
 
 drop policy if exists "SaaS: Dono ou convidado exclui compartilhamento" on public.lista_compartilhamentos;
@@ -344,7 +408,8 @@ create policy "SaaS: Dono ou convidado exclui compartilhamento"
   using (
     auth.uid() = owner_id 
     or auth.uid() = shared_with_user_id 
-    or lower(trim(shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+    or lower(trim(shared_with_email)) = lower(trim(coalesce(auth.jwt()->>'email', '')))
+    or public.is_admin()
   );
 
 -- Atualização das Políticas da tabela 'listas' para considerar permissões de compartilhamento
@@ -353,13 +418,14 @@ create policy "SaaS: Usuários veem suas próprias listas ou compartilhadas"
   on public.listas for select 
   using (
     (auth.uid() is not null and auth.uid() = user_id)
-    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or public.is_admin()
     or exists (
       select 1 from public.lista_compartilhamentos c 
       where c.lista_id = listas.id 
       and (
         c.shared_with_user_id = auth.uid() 
-        or lower(trim(c.shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+        or lower(trim(c.shared_with_email)) = lower(trim(coalesce(auth.jwt()->>'email', '')))
+        or (c.invite_code is not null and length(c.invite_code) > 0)
       )
     )
   );
@@ -369,14 +435,14 @@ create policy "SaaS: Usuários atualizam suas próprias listas ou compartilhadas
   on public.listas for update 
   using (
     (auth.uid() is not null and auth.uid() = user_id)
-    or lower(trim(auth.jwt()->>'email')) = 'viniciuscirne@gmail.com'
+    or public.is_admin()
     or exists (
       select 1 from public.lista_compartilhamentos c 
       where c.lista_id = listas.id 
       and c.permission = 'aberto'
       and (
         c.shared_with_user_id = auth.uid() 
-        or lower(trim(c.shared_with_email)) = lower(trim(auth.jwt()->>'email'))
+        or lower(trim(c.shared_with_email)) = lower(trim(coalesce(auth.jwt()->>'email', '')))
       )
     )
   );

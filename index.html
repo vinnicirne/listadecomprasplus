@@ -159,10 +159,6 @@
           </div>
         </div>
         <div class="header-actions">
-          <!-- Botão Sair da Conta no Header -->
-          <button id="btn-header-logout" class="btn btn-danger-icon-sm" title="Sair da Conta (Logout)">
-            🚪
-          </button>
           <!-- Botão Conta SaaS / Perfil -->
           <button id="btn-header-auth" class="btn btn-user-auth-badge" title="Meu Perfil">
             <span id="header-auth-icon">👤</span>
@@ -599,6 +595,21 @@
     <!-- TELA 5: PÁGINA DE PERFIL DO USUÁRIO & SAIR DA CONTA        -->
     <!-- ========================================================== -->
     <main id="view-perfil" class="view hidden">
+      <!-- Barra Superior de Navegação do Perfil -->
+      <div class="perfil-header-nav">
+        <button type="button" id="btn-perfil-voltar-app" class="btn btn-secondary btn-sm" title="Voltar ao Painel de Listas">
+          ← Voltar às Listas
+        </button>
+        <button type="button" id="btn-perfil-quick-logout" class="btn btn-outline-danger btn-sm" title="Encerrar Sessão">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Sair</span>
+        </button>
+      </div>
+
       <!-- Header do Perfil -->
       <div class="perfil-hero-card">
         <div class="perfil-avatar-circle" id="perfil-avatar-circle">
@@ -645,13 +656,29 @@
       </section>
 
       <!-- Card: Sair da Conta (Logout) -->
-      <section class="perfil-section-card" style="border-color: rgba(239, 68, 68, 0.25);">
-        <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; color: #ef4444;">🚪 Encerrar Sessão</h3>
-        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.85rem;">
-          Ao sair, suas listas permanecem seguras na nuvem e você voltará à tela inicial de login.
-        </p>
-        <button type="button" id="btn-perfil-logout" class="btn btn-danger" style="width: 100%; font-weight: 700;">
-          🚪 Sair da Conta (Logout)
+      <section class="perfil-section-card perfil-card-danger">
+        <div class="perfil-logout-header">
+          <div class="logout-icon-pill">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="perfil-logout-title">Encerrar Sessão</h3>
+            <p class="perfil-logout-desc">
+              Ao sair, suas listas permanecem seguras na nuvem e você voltará à tela inicial de login.
+            </p>
+          </div>
+        </div>
+        <button type="button" id="btn-perfil-logout" class="btn btn-logout-modern">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Sair da Conta (Logout)</span>
         </button>
       </section>
     </main>
@@ -1120,8 +1147,13 @@
           <button id="btn-sincronizar-nuvem" class="btn btn-outline" style="width: 100%;">
             🔄 Sincronizar Listas Agora
           </button>
-          <button id="btn-logout" class="btn btn-danger-outline" style="width: 100%;">
-            🚪 Sair da Conta (Logout)
+          <button id="btn-logout" class="btn btn-danger-outline" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-weight: 700;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Sair da Conta (Logout)</span>
           </button>
         </div>
       </div>
@@ -1188,6 +1220,8 @@
           </div>
         </div>
       </div>
+    </div>
+
     <!-- BOTTOM SHEET: NOVA ENTRADA NA CARTEIRA -->
     <div id="sheet-nova-entrada" class="bottom-sheet-backdrop hidden">
       <div class="bottom-sheet-content">
@@ -1325,6 +1359,7 @@
         <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
           Cole ou digite o código de convite recebido (ex: <code>LST-8931</code>) para conectar a lista à sua conta.
         </p>
+        <div id="convite-alert-msg" class="auth-alert hidden" style="margin-bottom: 0.75rem;"></div>
         <form id="form-entrar-codigo">
           <div class="form-group-mobile">
             <label for="input-convite-codigo">Código do Convite *</label>

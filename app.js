@@ -157,11 +157,13 @@ async function loadDataFromDb() {
     state.lists = await db.getLists();
     renderDashboard();
     updateAuthUI();
+    checkPendingInviteAfterLogin();
   } catch (err) {
     console.error('Erro ao carregar dados do banco:', err);
     state.lists = [];
     renderDashboard();
     updateAuthUI();
+    checkPendingInviteAfterLogin();
   }
 }
 
@@ -969,8 +971,19 @@ function setupEventListeners() {
   const btnDashEntrarConvite = document.getElementById('btn-dashboard-entrar-convite');
   if (btnDashEntrarConvite) {
     btnDashEntrarConvite.addEventListener('click', () => {
-      document.getElementById('form-entrar-codigo').reset();
+      vibrateDevice(15);
+      const form = document.getElementById('form-entrar-codigo');
+      if (form) form.reset();
+      const alertBox = document.getElementById('convite-alert-msg');
+      if (alertBox) {
+        alertBox.classList.add('hidden');
+        alertBox.textContent = '';
+      }
       openSheet('sheet-entrar-lista-codigo');
+      setTimeout(() => {
+        const input = document.getElementById('input-convite-codigo');
+        if (input) input.focus();
+      }, 200);
     });
   }
 
@@ -1072,6 +1085,12 @@ function setupEventListeners() {
 
   const btnPerfilLogout = document.getElementById('btn-perfil-logout');
   if (btnPerfilLogout) btnPerfilLogout.addEventListener('click', handleLogout);
+
+  const btnPerfilQuickLogout = document.getElementById('btn-perfil-quick-logout');
+  if (btnPerfilQuickLogout) btnPerfilQuickLogout.addEventListener('click', handleLogout);
+
+  const btnPerfilVoltar = document.getElementById('btn-perfil-voltar-app');
+  if (btnPerfilVoltar) btnPerfilVoltar.addEventListener('click', () => switchAppTab('listas'));
 
   const btnHeaderLogout = document.getElementById('btn-header-logout');
   if (btnHeaderLogout) btnHeaderLogout.addEventListener('click', handleLogout);
@@ -2251,30 +2270,119 @@ async function handleShareEmail(e) {
   }
 }
 
-async function handleJoinListByCode(e) {
-  e.preventDefault();
-  const input = document.getElementById('input-convite-codigo');
-  const code = input.value.trim();
-  const btn = document.getElementById('btn-submit-entrar-codigo');
+function showConviteAlert(msg, type = 'error') {
+  const alertBox = document.getElementById('convite-alert-msg');
+  if (alertBox) {
+    alertBox.className = `auth-alert ${type}`;
+    alertBox.textContent = msg;
+    alertBox.classList.remove('hidden');
+  } else {
+    alert(msg);
+  }
+}
 
-  btn.disabled = true;
-  btn.textContent = 'Conectando...';
+async function handleJoinListByCode(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const input = document.getElementById('input-convite-codigo');
+  const code = (input ? input.value : '').trim();
+  const btn = document.getElementById('btn-submit-entrar-codigo');
+  const alertBox = document.getElementById('convite-alert-msg');
+  if (alertBox) alertBox.classList.add('hidden');
+
+  if (!code) {
+    showConviteAlert('Por favor, digite ou cole o código do convite.', 'error');
+    if (input) input.focus();
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Conectando à lista...';
+  }
 
   try {
     const result = await db.joinSharedListByCode(code);
     vibrateDevice(30);
     closeSheet('sheet-entrar-lista-codigo');
-    input.value = '';
-    alert(`🎉 Lista "${result.list.name}" conectada à sua conta com sucesso! Permissão: ${result.permission === 'aberto' ? 'Modo Aberto (Inserir & Editar)' : 'Modo Fechado (Somente Leitura)'}.`);
+    if (input) input.value = '';
+
+    // Atualiza a lista na memória e na UI
     state.lists = await db.getLists();
+    if (!state.lists.some(l => l.id === result.list.id)) {
+      state.lists.unshift(result.list);
+    }
+
     renderDashboard();
+    switchAppTab('listas');
     openList(result.list.id);
   } catch (err) {
-    alert('Erro ao conectar lista: ' + err.message);
+    console.error('Erro ao conectar via convite:', err);
+    showConviteAlert(err.message || 'Erro ao conectar lista. Verifique o código e tente novamente.', 'error');
   } finally {
-    btn.disabled = false;
-    btn.textContent = '🚀 Conectar Lista';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🚀 Conectar Lista';
+    }
   }
+}
+
+/**
+ * Detecta parâmetro ?convite=LST-XXXXX na URL (vindo de WhatsApp ou link direto)
+ */
+function checkUrlInviteParam() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const inviteParam = params.get('convite');
+    if (!inviteParam) return;
+
+    let code = inviteParam.trim();
+    if (code.includes('convite=')) {
+      const match = code.match(/convite=([A-Za-z0-9\-]+)/i);
+      if (match) code = match[1];
+    }
+    code = code.toUpperCase().replace(/\s+/g, '');
+
+    // Limpa o parâmetro da barra de endereço para evitar reexecução ao recarregar
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    if (db.isAuthenticated()) {
+      const input = document.getElementById('input-convite-codigo');
+      if (input) input.value = code;
+      openSheet('sheet-entrar-lista-codigo');
+      setTimeout(() => {
+        if (confirm(`🛒 Você abriu um link de convite para a lista (${code})!\n\nDeseja conectar esta lista à sua conta agora?`)) {
+          const form = document.getElementById('form-entrar-codigo');
+          if (form) form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }, 400);
+    } else {
+      // Guarda para conectar assim que o usuário entrar/criar conta
+      sessionStorage.setItem('pending_invite_code', code);
+      alert(`🛒 Você recebeu um convite para acessar uma lista compartilhada (${code})!\n\nFaça login ou crie sua conta grátis para acessá-la.`);
+    }
+  } catch (_) {}
+}
+
+/**
+ * Executa convite pendente guardado antes do login
+ */
+function checkPendingInviteAfterLogin() {
+  try {
+    const pendingCode = sessionStorage.getItem('pending_invite_code');
+    if (!pendingCode) return;
+    sessionStorage.removeItem('pending_invite_code');
+
+    setTimeout(() => {
+      const input = document.getElementById('input-convite-codigo');
+      if (input) input.value = pendingCode;
+      openSheet('sheet-entrar-lista-codigo');
+      if (confirm(`🛒 Deseja conectar agora a lista do convite (${pendingCode}) recebido à sua conta?`)) {
+        const form = document.getElementById('form-entrar-codigo');
+        if (form) form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
+    }, 600);
+  } catch (_) {}
 }
 
 // ==========================================================
@@ -2760,5 +2868,6 @@ window.handleDeleteHistoryItem = async function(id) {
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await loadDataFromDb();
+  checkUrlInviteParam();
 });
 

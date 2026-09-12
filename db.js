@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'ListaComprasDB';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 // Configuração Padrão do Supabase fornecida pelo usuário
 const DEFAULT_SUPABASE_URL = 'https://xlxuwqcszhxxzofebkjb.supabase.co';
@@ -77,6 +77,9 @@ class Database {
 
   async getStore(storeName, mode = 'readonly') {
     const db = await this.init();
+    if (!db.objectStoreNames.contains(storeName)) {
+      throw new Error(`ObjectStore '${storeName}' ainda não inicializado`);
+    }
     const tx = db.transaction(storeName, mode);
     return tx.objectStore(storeName);
   }
@@ -444,6 +447,17 @@ class Database {
             };
           });
 
+          // Inclui listas compartilhadas salvas localmente caso a query da nuvem ainda não as liste
+          try {
+            const localLists = await this.getLocalLists();
+            const localShared = localLists.filter(l => l.isShared);
+            for (const s of localShared) {
+              if (!mappedLists.some(m => m.id === s.id)) {
+                mappedLists.push(s);
+              }
+            }
+          } catch (_) {}
+
           // Atualiza o cache local no IndexedDB silenciosamente
           for (const list of mappedLists) {
             await this.saveLocalList(list);
@@ -548,7 +562,9 @@ class Database {
       throw new Error('Você precisa estar autenticado para criar ou salvar listas.');
     }
 
-    list.userId = this.user.id;
+    if (!list.userId) {
+      list.userId = this.user.id;
+    }
 
     // 1. Salva localmente primeiro (garantia de velocidade e persistência offline)
     await this.saveLocalList(list);
@@ -1075,13 +1091,24 @@ class Database {
       createdAt: entry.createdAt || new Date().toISOString()
     };
 
-    // 1. Salva no IndexedDB
-    const store = await this.getStore('carteira', 'readwrite');
-    await new Promise((resolve, reject) => {
-      const req = store.put(record);
-      req.onsuccess = () => resolve(true);
-      req.onerror = () => reject(req.error);
-    });
+    // 1. Salva no IndexedDB (com fallback de segurança em localStorage)
+    try {
+      const store = await this.getStore('carteira', 'readwrite');
+      await new Promise((resolve, reject) => {
+        const req = store.put(record);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (localErr) {
+      console.warn('Aviso: gravando entrada no cache local de segurança:', localErr);
+    }
+
+    try {
+      const local = JSON.parse(localStorage.getItem('compras_local_carteira') || '[]');
+      const filtered = local.filter(e => e.id !== record.id);
+      filtered.push(record);
+      localStorage.setItem('compras_local_carteira', JSON.stringify(filtered));
+    } catch (_) {}
 
     // 2. Sincroniza com o Supabase
     if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
@@ -1133,7 +1160,7 @@ class Database {
     // Tenta sincronizar com a nuvem
     if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
       try {
-        const res = await fetch(`${this.supabaseUrl}/rest/v1/carteira_entradas?select=*&order=entry_date.desc`, {
+        const res = await fetch(`${this.supabaseUrl}/rest/v1/carteira_entradas?select=*&order=created_at.desc`, {
           method: 'GET',
           headers: this.getHeaders()
         });
@@ -1143,10 +1170,13 @@ class Database {
           this.isCloudOnline = true;
           const store = await this.getStore('carteira', 'readwrite');
           for (const row of cloudData) {
-            const parts = (row.entry_date || '').split('-');
+            // Fallback: se entry_date vier nulo (tabela antiga sem a coluna), reconstrói a partir de day/month/year
+            const entryDateStr = row.entry_date || null;
+            const parts = entryDateStr ? entryDateStr.split('-') : [];
             const y = Number(row.year) || Number(parts[0]) || new Date().getFullYear();
             const m = Number(row.month) || Number(parts[1]) || 1;
             const d = Number(row.day) || Number(parts[2]) || 1;
+            const entryDate = entryDateStr || `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
             await new Promise((resolve) => {
               const req = store.put({
@@ -1156,7 +1186,7 @@ class Database {
                 amount: Number(row.amount) || 0,
                 category: row.category,
                 status: row.status,
-                entryDate: row.entry_date,
+                entryDate: entryDate,
                 day: d,
                 month: m,
                 year: y,
@@ -1173,26 +1203,34 @@ class Database {
       }
     }
 
-    // Lê do IndexedDB local
-    const store = await this.getStore('carteira', 'readonly');
-    return new Promise((resolve, reject) => {
-      const request = store.getAll();
-      request.onsuccess = () => {
-        let entries = request.result || [];
-        entries = entries.filter(e => e.userId === this.user.id);
+    // Lê do IndexedDB local com fallback em localStorage
+    let entries = [];
+    try {
+      const store = await this.getStore('carteira', 'readonly');
+      entries = await new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    } catch (_) {
+      try {
+        entries = JSON.parse(localStorage.getItem('compras_local_carteira') || '[]');
+      } catch (_) {
+        entries = [];
+      }
+    }
 
-        if (filter.year && filter.year !== 'all') {
-          entries = entries.filter(e => Number(e.year) === Number(filter.year));
-        }
-        if (filter.month && filter.month !== 'all') {
-          entries = entries.filter(e => Number(e.month) === Number(filter.month));
-        }
+    entries = entries.filter(e => e.userId === this.user.id);
 
-        entries.sort((a, b) => new Date(b.entryDate) - new Date(a.entryDate));
-        resolve(entries);
-      };
-      request.onerror = () => reject(request.error);
-    });
+    if (filter.year && filter.year !== 'all') {
+      entries = entries.filter(e => Number(e.year) === Number(filter.year));
+    }
+    if (filter.month && filter.month !== 'all') {
+      entries = entries.filter(e => Number(e.month) === Number(filter.month));
+    }
+
+    entries.sort((a, b) => new Date(b.entryDate) - new Date(a.entryDate));
+    return entries;
   }
 
   /**
@@ -1336,6 +1374,51 @@ class Database {
   }
 
   /**
+   * Salva registro de compartilhamento no cache local (IndexedDB/localStorage)
+   */
+  saveLocalShare(shareRecord) {
+    try {
+      const shares = JSON.parse(localStorage.getItem('compras_local_shares') || '[]');
+      const filtered = shares.filter(s => s.id !== shareRecord.id && s.invite_code !== shareRecord.invite_code);
+      filtered.push(shareRecord);
+      localStorage.setItem('compras_local_shares', JSON.stringify(filtered));
+    } catch (_) {}
+  }
+
+  /**
+   * Busca registro de compartilhamento pelo código no cache local
+   */
+  async getLocalShareByCode(code) {
+    try {
+      const clean = (code || '').trim().toUpperCase();
+      const shares = JSON.parse(localStorage.getItem('compras_local_shares') || '[]');
+      const found = shares.find(s => (s.invite_code || '').toUpperCase() === clean);
+      if (found) return found;
+
+      // Também verifica se alguma lista armazenada no IndexedDB possui esse inviteCode
+      const store = await this.getStore('listas', 'readonly');
+      const allLists = await new Promise((res) => {
+        const req = store.getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror = () => res([]);
+      });
+      const list = allLists.find(l => (l.inviteCode || '').toUpperCase() === clean);
+      if (list) {
+        return {
+          id: 'share_local_' + list.id,
+          lista_id: list.id,
+          owner_id: list.userId || 'owner',
+          shared_with_email: 'convite_link@comprasplus.app',
+          permission: list.sharePermission || 'aberto',
+          invite_code: clean,
+          created_at: new Date().toISOString()
+        };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /**
    * Cria um link/código de compartilhamento aberto para envio via WhatsApp
    */
   async createShareInviteCode(listId, permission = 'fechado') {
@@ -1343,7 +1426,9 @@ class Database {
       throw new Error('Você precisa estar autenticado.');
     }
 
-    const inviteCode = this.generateInviteCode();
+    const list = await this.getListById(listId);
+    let inviteCode = list?.inviteCode || this.generateInviteCode();
+
     const shareRecord = {
       id: 'share_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now(),
       lista_id: listId,
@@ -1355,19 +1440,44 @@ class Database {
     };
 
     if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
-      const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos`, {
-        method: 'POST',
-        headers: {
-          ...this.getHeaders(),
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify(shareRecord)
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Falha ao criar convite.');
+      try {
+        // Verifica se já existe registro de convite desta lista para o dono
+        const checkRes = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?lista_id=eq.${encodeURIComponent(listId)}&owner_id=eq.${encodeURIComponent(this.user.id)}&invite_code=not.is.null&select=*`, {
+          headers: this.getHeaders()
+        });
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          if (existing && existing.length > 0) {
+            inviteCode = existing[0].invite_code || inviteCode;
+            shareRecord.id = existing[0].id;
+            shareRecord.invite_code = inviteCode;
+            await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?id=eq.${encodeURIComponent(existing[0].id)}`, {
+              method: 'PATCH',
+              headers: this.getHeaders(),
+              body: JSON.stringify({ permission: permission === 'aberto' ? 'aberto' : 'fechado' })
+            });
+          } else {
+            await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos`, {
+              method: 'POST',
+              headers: {
+                ...this.getHeaders(),
+                'Prefer': 'resolution=merge-duplicates,return=representation'
+              },
+              body: JSON.stringify(shareRecord)
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao salvar convite no Supabase Cloud:', err);
       }
+    }
+
+    // Salva localmente para disponibilidade imediata
+    this.saveLocalShare(shareRecord);
+    if (list) {
+      list.inviteCode = inviteCode;
+      list.sharePermission = permission;
+      await this.saveLocalList(list);
     }
 
     return {
@@ -1385,56 +1495,177 @@ class Database {
       throw new Error('Você precisa fazer login para acessar uma lista compartilhada.');
     }
 
-    const cleanCode = (inviteCode || '').trim().toUpperCase();
+    let cleanCode = (inviteCode || '').trim();
+    // Se o usuário colou o link completo do WhatsApp, extrai apenas o código
+    if (cleanCode.includes('convite=')) {
+      const match = cleanCode.match(/convite=([A-Za-z0-9\-]+)/i);
+      if (match) cleanCode = match[1];
+    }
+    cleanCode = cleanCode.toUpperCase().replace(/\s+/g, '');
+    // Se o usuário digitou sem o prefixo LST- (ex: 8931A), normaliza automaticamente
+    if (!cleanCode.startsWith('LST-') && cleanCode.length <= 6 && cleanCode.length > 0) {
+      cleanCode = 'LST-' + cleanCode;
+    }
     if (!cleanCode) throw new Error('Código de convite inválido.');
 
-    if (!this.supabaseUrl || !this.supabaseKey || !this.accessToken) {
-      throw new Error('Conexão com a nuvem indisponível no momento.');
+    let share = null;
+
+    // 1. Tenta buscar no Supabase
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        // Tenta com token de usuário autenticado (busca case-insensitive via ilike)
+        let res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?invite_code=ilike.${encodeURIComponent(cleanCode)}&select=*`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+
+        let shares = [];
+        if (res.ok) {
+          shares = await res.json();
+        } else {
+          const errBody = await res.text().catch(() => '');
+          console.warn(`[Convite] Erro autenticado (${res.status}):`, errBody);
+        }
+
+        // Se RLS restringir o token de usuário, tenta com chave anônima (bypassa restrição de convite)
+        if (!shares || shares.length === 0) {
+          const anonHeaders = {
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`,
+            'Content-Type': 'application/json'
+          };
+          const anonRes = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?invite_code=ilike.${encodeURIComponent(cleanCode)}&select=*`, {
+            method: 'GET',
+            headers: anonHeaders
+          });
+          if (anonRes.ok) {
+            shares = await anonRes.json();
+          } else {
+            const errBody2 = await anonRes.text().catch(() => '');
+            console.warn(`[Convite] Erro anon (${anonRes.status}):`, errBody2);
+          }
+        }
+
+        if (shares && shares.length > 0) {
+          share = shares[0];
+        }
+      } catch (err) {
+        console.warn('Erro ao consultar Supabase para código de convite:', err);
+      }
     }
 
-    // 1. Busca o compartilhamento
-    const res = await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?invite_code=eq.${encodeURIComponent(cleanCode)}&select=*`, {
-      method: 'GET',
-      headers: this.getHeaders()
-    });
-
-    if (!res.ok) throw new Error('Falha ao buscar convite de compartilhamento.');
-    const shares = await res.json();
-    if (!shares || shares.length === 0) {
-      throw new Error('Código de convite não encontrado ou expirado.');
+    // 2. Se não encontrou no Supabase, tenta o cache local
+    if (!share) {
+      share = await this.getLocalShareByCode(cleanCode);
     }
 
-    const share = shares[0];
+    if (!share) {
+      throw new Error('Código de convite não encontrado ou expirado. Verifique o código e tente novamente.');
+    }
 
-    // Se o usuário atual for o próprio dono
+    // Se o usuário atual for o próprio dono da lista
     if (share.owner_id === this.user.id) {
       const ownerList = await this.getListById(share.lista_id);
-      return { list: ownerList, permission: 'owner', isOwner: true };
+      if (ownerList) {
+        return { list: ownerList, permission: 'owner', isOwner: true };
+      }
     }
 
-    // Vincula o usuário atual ao compartilhamento
-    try {
-      await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?id=eq.${share.id}`, {
-        method: 'PATCH',
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          shared_with_user_id: this.user.id,
-          shared_with_email: this.user.email
-        })
-      });
-    } catch (_) {}
+    // 3. Vincula o usuário atual ao compartilhamento no Supabase
+    if (this.supabaseUrl && this.supabaseKey && this.accessToken) {
+      try {
+        if (!share.shared_with_user_id || share.shared_with_user_id === this.user.id) {
+          await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos?id=eq.${encodeURIComponent(share.id)}`, {
+            method: 'PATCH',
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+              shared_with_user_id: this.user.id,
+              shared_with_email: this.user.email
+            })
+          });
+        } else {
+          await fetch(`${this.supabaseUrl}/rest/v1/lista_compartilhamentos`, {
+            method: 'POST',
+            headers: {
+              ...this.getHeaders(),
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              id: 'share_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now(),
+              lista_id: share.lista_id,
+              owner_id: share.owner_id,
+              shared_with_user_id: this.user.id,
+              shared_with_email: this.user.email,
+              permission: share.permission,
+              invite_code: null,
+              created_at: new Date().toISOString()
+            })
+          });
+        }
+      } catch (err) {
+        console.warn('[Convite] Aviso ao vincular no Supabase:', err);
+      }
+    }
 
-    // 2. Busca a lista compartilhada
-    const listRes = await fetch(`${this.supabaseUrl}/rest/v1/listas?id=eq.${share.lista_id}&select=*`, {
-      method: 'GET',
-      headers: this.getHeaders()
-    });
+    // 4. Busca os dados da lista
+    let row = null;
+    if (this.supabaseUrl && this.supabaseKey) {
+      try {
+        let listRes = await fetch(`${this.supabaseUrl}/rest/v1/listas?id=eq.${encodeURIComponent(share.lista_id)}&select=*`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
 
-    if (!listRes.ok) throw new Error('Não foi possível carregar a lista associada a este convite.');
-    const listData = await listRes.json();
-    if (!listData || listData.length === 0) throw new Error('A lista compartilhada não existe mais.');
+        if (listRes.ok) {
+          const listRows = await listRes.json();
+          if (listRows && listRows.length > 0) {
+            row = listRows[0];
+          }
+        }
 
-    const row = listData[0];
+        // Se veio vazio (por RLS transitória ou delay), tenta com chave anônima
+        if (!row) {
+          const anonHeaders = {
+            'apikey': this.supabaseKey,
+            'Authorization': `Bearer ${this.supabaseKey}`,
+            'Content-Type': 'application/json'
+          };
+          const anonListRes = await fetch(`${this.supabaseUrl}/rest/v1/listas?id=eq.${encodeURIComponent(share.lista_id)}&select=*`, {
+            method: 'GET',
+            headers: anonHeaders
+          });
+          if (anonListRes.ok) {
+            const anonRows = await anonListRes.json();
+            if (anonRows && anonRows.length > 0) {
+              row = anonRows[0];
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Convite] Erro ao buscar lista no Supabase:', err);
+      }
+    }
+
+    // Fallback local se a nuvem não responder
+    if (!row) {
+      const local = await this.getListById(share.lista_id);
+      if (local) {
+        row = {
+          id: local.id,
+          user_id: local.userId || share.owner_id,
+          name: local.name,
+          category: local.category,
+          budget: local.budget,
+          items: local.items,
+          created_at: local.createdAt
+        };
+      }
+    }
+
+    if (!row) {
+      throw new Error('Não foi possível carregar a lista associada a este convite.');
+    }
+
     const joinedList = {
       id: row.id,
       userId: row.user_id,
@@ -1444,15 +1675,16 @@ class Database {
       items: Array.isArray(row.items) ? row.items : [],
       createdAt: row.created_at || new Date().toISOString(),
       isShared: true,
-      permission: share.permission
+      permission: share.permission || 'fechado'
     };
 
-    // Salva no cache local
+    // Salva no cache local do IndexedDB e de compartilhamentos
     await this.saveLocalList(joinedList);
+    this.saveLocalShare(share);
 
     return {
       list: joinedList,
-      permission: share.permission,
+      permission: share.permission || 'fechado',
       isOwner: false
     };
   }
