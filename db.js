@@ -6,20 +6,69 @@
 const DB_NAME = 'ListaComprasDB';
 const DB_VERSION = 4;
 
-// Configuração Padrão do Supabase fornecida pelo usuário
-const DEFAULT_SUPABASE_URL = 'https://xlxuwqcszhxxzofebkjb.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhseHV3cWNzemh4eHpvZmVia2piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNjUxNzYsImV4cCI6MjEwNDY0MTE3Nn0.ME_Zo11tBK-U5CuYnLtAGvwuok-YZFcPfuLbaZxiVjE';
+// Resolução Dinâmica do Supabase (lida de window.__ENV__, Vercel ou Fallback)
+const getInitialSupabaseUrl = () => {
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.SUPABASE_URL) {
+    const val = String(window.__ENV__.SUPABASE_URL).trim();
+    if (val) return val;
+  }
+  return 'https://xlxuwqcszhxxzofebkjb.supabase.co';
+};
+
+const getInitialSupabaseKey = () => {
+  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.SUPABASE_KEY) {
+    const val = String(window.__ENV__.SUPABASE_KEY).trim();
+    if (val) return val;
+  }
+  return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhseHV3cWNzemh4eHpvZmVia2piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNjUxNzYsImV4cCI6MjEwNDY0MTE3Nn0.ME_Zo11tBK-U5CuYnLtAGvwuok-YZFcPfuLbaZxiVjE';
+};
 
 class Database {
   constructor() {
     this.db = null;
     this.initPromise = null;
-    this.supabaseUrl = DEFAULT_SUPABASE_URL;
-    this.supabaseKey = DEFAULT_SUPABASE_KEY;
+    this.supabaseUrl = getInitialSupabaseUrl();
+    this.supabaseKey = getInitialSupabaseKey();
     this.accessToken = null;
     this.user = null;
     this.isCloudOnline = false;
     this.isTableReady = false;
+  }
+
+  /**
+   * Carrega configurações de ambiente (Vercel Serverless API, localStorage e IndexedDB)
+   */
+  async loadConfig() {
+    // 1. window.__ENV__ (injetado via env.js gerado pelo .env ou pelo build da Vercel)
+    if (typeof window !== 'undefined' && window.__ENV__) {
+      if (window.__ENV__.SUPABASE_URL && window.__ENV__.SUPABASE_URL.trim()) {
+        this.supabaseUrl = window.__ENV__.SUPABASE_URL.trim();
+      }
+      if (window.__ENV__.SUPABASE_KEY && window.__ENV__.SUPABASE_KEY.trim()) {
+        this.supabaseKey = window.__ENV__.SUPABASE_KEY.trim();
+      }
+    }
+
+    // 2. Se a URL ainda não estiver definida ou for a padrão, tenta carregar do endpoint serverless da Vercel (/api/config)
+    const isDefaultUrl = !this.supabaseUrl || this.supabaseUrl === 'https://xlxuwqcszhxxzofebkjb.supabase.co';
+    if (isDefaultUrl && typeof window !== 'undefined' && window.location && window.location.protocol.startsWith('http')) {
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const cfg = await res.json();
+          if (cfg.supabaseUrl && cfg.supabaseUrl.trim()) this.supabaseUrl = cfg.supabaseUrl.trim();
+          if (cfg.supabaseKey && cfg.supabaseKey.trim()) this.supabaseKey = cfg.supabaseKey.trim();
+        }
+      } catch (_) {}
+    }
+
+    // 3. Sobrescreve com configuração customizada salva no IndexedDB pelo admin (se houver)
+    try {
+      const customUrl = await this.getConfig('supabase_url');
+      const customKey = await this.getConfig('supabase_key');
+      if (customUrl && customUrl.trim()) this.supabaseUrl = customUrl.trim();
+      if (customKey && customKey.trim()) this.supabaseKey = customKey.trim();
+    } catch (_) {}
   }
 
   /**
@@ -62,6 +111,7 @@ class Database {
 
       request.onsuccess = async (event) => {
         this.db = event.target.result;
+        await this.loadConfig();
         await this.loadSession();
         resolve(this.db);
       };
