@@ -8,17 +8,23 @@ const DB_VERSION = 4;
 
 // Resolução Dinâmica do Supabase (lida de window.__ENV__, Vercel ou Fallback)
 const getInitialSupabaseUrl = () => {
-  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.SUPABASE_URL) {
-    const val = String(window.__ENV__.SUPABASE_URL).trim();
-    if (val) return val;
+  if (typeof window !== 'undefined' && window.__ENV__) {
+    const val = window.__ENV__.NEXT_PUBLIC_SUPABASE_URL || 
+                window.__ENV__.NEXT_SUPABASE_URL || 
+                window.__ENV__.SUPABASE_URL;
+    if (val && String(val).trim()) return String(val).trim();
   }
   return 'https://xlxuwqcszhxxzofebkjb.supabase.co';
 };
 
 const getInitialSupabaseKey = () => {
-  if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__.SUPABASE_KEY) {
-    const val = String(window.__ENV__.SUPABASE_KEY).trim();
-    if (val) return val;
+  if (typeof window !== 'undefined' && window.__ENV__) {
+    const val = window.__ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+                window.__ENV__.NEXT_PUBLIC_SUPABASE_KEY || 
+                window.__ENV__.NEXT_SUPABASE_KEY || 
+                window.__ENV__.NEXT_SUPABASE_ANON_KEY || 
+                window.__ENV__.SUPABASE_KEY;
+    if (val && String(val).trim()) return String(val).trim();
   }
   return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhseHV3cWNzemh4eHpvZmVia2piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNjUxNzYsImV4cCI6MjEwNDY0MTE3Nn0.ME_Zo11tBK-U5CuYnLtAGvwuok-YZFcPfuLbaZxiVjE';
 };
@@ -41,11 +47,20 @@ class Database {
   async loadConfig() {
     // 1. window.__ENV__ (injetado via env.js gerado pelo .env ou pelo build da Vercel)
     if (typeof window !== 'undefined' && window.__ENV__) {
-      if (window.__ENV__.SUPABASE_URL && window.__ENV__.SUPABASE_URL.trim()) {
-        this.supabaseUrl = window.__ENV__.SUPABASE_URL.trim();
+      const envUrl = window.__ENV__.NEXT_PUBLIC_SUPABASE_URL || 
+                     window.__ENV__.NEXT_SUPABASE_URL || 
+                     window.__ENV__.SUPABASE_URL;
+      const envKey = window.__ENV__.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+                     window.__ENV__.NEXT_PUBLIC_SUPABASE_KEY || 
+                     window.__ENV__.NEXT_SUPABASE_KEY || 
+                     window.__ENV__.NEXT_SUPABASE_ANON_KEY || 
+                     window.__ENV__.SUPABASE_KEY;
+
+      if (envUrl && String(envUrl).trim()) {
+        this.supabaseUrl = String(envUrl).trim();
       }
-      if (window.__ENV__.SUPABASE_KEY && window.__ENV__.SUPABASE_KEY.trim()) {
-        this.supabaseKey = window.__ENV__.SUPABASE_KEY.trim();
+      if (envKey && String(envKey).trim()) {
+        this.supabaseKey = String(envKey).trim();
       }
     }
 
@@ -56,8 +71,10 @@ class Database {
         const res = await fetch('/api/config');
         if (res.ok) {
           const cfg = await res.json();
-          if (cfg.supabaseUrl && cfg.supabaseUrl.trim()) this.supabaseUrl = cfg.supabaseUrl.trim();
-          if (cfg.supabaseKey && cfg.supabaseKey.trim()) this.supabaseKey = cfg.supabaseKey.trim();
+          const apiValUrl = cfg.NEXT_PUBLIC_SUPABASE_URL || cfg.supabaseUrl;
+          const apiValKey = cfg.NEXT_PUBLIC_SUPABASE_ANON_KEY || cfg.supabaseKey;
+          if (apiValUrl && String(apiValUrl).trim()) this.supabaseUrl = String(apiValUrl).trim();
+          if (apiValKey && String(apiValKey).trim()) this.supabaseKey = String(apiValKey).trim();
         }
       } catch (_) {}
     }
