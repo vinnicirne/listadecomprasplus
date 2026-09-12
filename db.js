@@ -430,10 +430,20 @@ class Database {
             }
           } catch (_) {}
 
+          // Cache local para mesclar campos de status e date
+          let localMap = {};
+          try {
+            const localLists = await this.getLocalLists();
+            localLists.forEach(l => { localMap[l.id] = l; });
+          } catch (_) {}
+
           // Mapeia do schema do Supabase para o formato do app
           const mappedLists = cloudData.map(row => {
             const isOwner = row.user_id === this.user.id;
             const permission = isOwner ? 'owner' : (sharesMap[row.id] || 'fechado');
+            const local = localMap[row.id] || {};
+            const listDate = row.date || local.date || (row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+            const listStatus = row.status || local.status || 'aberta';
             return {
               id: row.id,
               userId: row.user_id,
@@ -442,6 +452,9 @@ class Database {
               budget: Number(row.budget) || 0,
               items: Array.isArray(row.items) ? row.items : [],
               createdAt: row.created_at || new Date().toISOString(),
+              date: listDate,
+              status: listStatus,
+              concluidaAt: row.concluida_at || local.concluidaAt || null,
               isShared: !isOwner,
               permission: permission
             };
@@ -583,7 +596,11 @@ class Database {
           created_at: list.createdAt
         };
 
-        await fetch(endpoint, {
+        if (list.date) payload.date = list.date;
+        if (list.status) payload.status = list.status;
+        if (list.concluidaAt) payload.concluida_at = list.concluidaAt;
+
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
             ...this.getHeaders(),
@@ -591,6 +608,27 @@ class Database {
           },
           body: JSON.stringify(payload)
         });
+
+        // Caso a coluna date ou status ainda não exista no Supabase (400), tenta o payload básico
+        if (!res.ok && res.status === 400) {
+          const basePayload = {
+            id: list.id,
+            user_id: this.user.id,
+            name: list.name,
+            category: list.category,
+            budget: list.budget,
+            items: list.items || [],
+            created_at: list.createdAt
+          };
+          await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              ...this.getHeaders(),
+              'Prefer': 'resolution=merge-duplicates'
+            },
+            body: JSON.stringify(basePayload)
+          });
+        }
       } catch (err) {
         console.warn('Lista salva localmente, mas sincronização em nuvem falhou:', err);
       }

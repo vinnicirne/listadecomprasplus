@@ -43,6 +43,17 @@ function formatCurrency(val) {
   return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function formatDateBR(dateStr) {
+  if (!dateStr) return '';
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const parts = dateStr.split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleDateString('pt-BR');
+}
+
 function getIcon(cat) {
   return CATEGORY_ICONS[cat] || '🏷️';
 }
@@ -231,6 +242,9 @@ function renderDashboard() {
     const qtdItens = (list.items || []).length;
 
       const isOwner = !list.isShared;
+      const isConcluida = list.status === 'concluida';
+      const listDateFormatted = formatDateBR(list.date || list.createdAt);
+
       let badgeShared = '';
       if (list.isShared) {
         if (list.permission === 'aberto') {
@@ -242,14 +256,23 @@ function renderDashboard() {
         badgeShared = '<span class="badge-shared-tag tag-owner">👑 Minha Lista</span>';
       }
 
+      const badgeConcluida = isConcluida 
+        ? '<span class="badge-shared-tag tag-concluida">✅ Concluída</span>' 
+        : '';
+      const badgeData = listDateFormatted 
+        ? `<span class="badge-shared-tag tag-data">📅 ${escapeHtml(listDateFormatted)}</span>` 
+        : '';
+
       return `
-        <div class="card-lista-item" onclick="openList('${list.id}', event)">
+        <div class="card-lista-item ${isConcluida ? 'lista-concluida' : ''}" onclick="openList('${list.id}', event)">
           <div class="card-lista-header">
             <div>
-              <div style="display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem;">
+              <div style="display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.2rem; flex-wrap: wrap;">
                 ${badgeShared}
+                ${badgeConcluida}
+                ${badgeData}
               </div>
-              <h3 class="card-lista-title">${escapeHtml(list.name)}</h3>
+              <h3 class="card-lista-title" style="${isConcluida ? 'text-decoration: line-through; opacity: 0.85;' : ''}">${escapeHtml(list.name)}</h3>
               <span class="budget-tag" style="margin-top: 0.25rem;">${icon} ${escapeHtml(list.category)}</span>
             </div>
             ${isOwner ? `
@@ -275,9 +298,20 @@ function renderDashboard() {
             </span>
           </div>
 
-          <button class="btn btn-primary btn-sm" style="width: 100%; margin-top: 0.75rem; min-height: 42px; font-size: 0.9rem;" onclick="openList('${list.id}', event)">
-            Abrir Lista & Itens →
-          </button>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button class="btn btn-primary btn-sm" style="flex: 2; min-height: 40px; font-size: 0.88rem;" onclick="openList('${list.id}', event)">
+              Abrir Itens →
+            </button>
+            ${isConcluida ? `
+              <button class="btn btn-outline btn-sm" style="flex: 1; min-height: 40px; font-size: 0.82rem; border-color: #10b981; color: #10b981; white-space: nowrap;" onclick="window.openConcluirCompraModalById('${list.id}', event)" title="Ver fechamento da lista">
+                ✅ Concluída
+              </button>
+            ` : `
+              <button class="btn btn-finish-sm btn-sm" style="flex: 1; min-height: 40px; font-size: 0.82rem; white-space: nowrap;" onclick="window.openConcluirCompraModalById('${list.id}', event)" title="Concluir lista, lançar no histórico e deduzir do saldo">
+                🏁 Concluir
+              </button>
+            `}
+          </div>
         </div>
       `;
     }).join('');
@@ -349,6 +383,31 @@ async function renderListDetail(listId) {
   // Atualizar cabeçalho da lista
   document.getElementById('detalhe-nome-lista').textContent = list.name;
   document.getElementById('detalhe-categoria-tag').textContent = `${getIcon(list.category)} ${list.category}`;
+
+  const elDetalheData = document.getElementById('detalhe-data-tag');
+  if (elDetalheData) {
+    const dStr = formatDateBR(list.date || list.createdAt);
+    elDetalheData.textContent = dStr ? `📅 ${dStr}` : `📅 Hoje`;
+  }
+
+  const elDetalheStatus = document.getElementById('detalhe-status-badge');
+  if (elDetalheStatus) {
+    if (list.status === 'concluida') {
+      elDetalheStatus.classList.remove('hidden');
+    } else {
+      elDetalheStatus.classList.add('hidden');
+    }
+  }
+
+  if (btnAbrirConcluir) {
+    if (list.status === 'concluida') {
+      btnAbrirConcluir.innerHTML = '✅ Concluída';
+      btnAbrirConcluir.title = 'Compra já concluída e gravada no histórico. Clique para revisar ou regravar.';
+    } else {
+      btnAbrirConcluir.innerHTML = '🏁 Concluir';
+      btnAbrirConcluir.title = 'Finalizar compra, gravar no histórico e deduzir do saldo';
+    }
+  }
 
   // Calcular métricas
   const { orcamento, totalGasto, saldoDisponivel, percentualConsumido } = calculateListTotals(list);
@@ -617,6 +676,7 @@ async function handleCreateList(e) {
   const nome = document.getElementById('nova-lista-nome').value.trim();
   const categoria = document.getElementById('nova-lista-categoria').value;
   const orcamento = parseFloat(document.getElementById('nova-lista-orcamento').value) || 0;
+  const dataInput = document.getElementById('nova-lista-data')?.value || new Date().toISOString().split('T')[0];
 
   if (!nome) {
     alert('Informe o nome da lista.');
@@ -628,6 +688,8 @@ async function handleCreateList(e) {
     name: nome,
     category: categoria,
     budget: orcamento,
+    date: dataInput,
+    status: 'aberta',
     createdAt: new Date().toISOString(),
     items: []
   };
@@ -905,6 +967,8 @@ function setupEventListeners() {
     } else {
       // No dashboard -> Nova Lista
       document.getElementById('form-nova-lista').reset();
+      const inputData = document.getElementById('nova-lista-data');
+      if (inputData) inputData.value = new Date().toISOString().split('T')[0];
       openSheet('sheet-nova-lista');
       setTimeout(() => document.getElementById('nova-lista-nome').focus(), 150);
     }
@@ -912,6 +976,9 @@ function setupEventListeners() {
 
   // Botões de Estado Vazio
   document.getElementById('btn-criar-primeira-lista').addEventListener('click', () => {
+    document.getElementById('form-nova-lista').reset();
+    const inputData = document.getElementById('nova-lista-data');
+    if (inputData) inputData.value = new Date().toISOString().split('T')[0];
     openSheet('sheet-nova-lista');
   });
 
@@ -964,6 +1031,8 @@ function setupEventListeners() {
   if (btnDashNovaLista) {
     btnDashNovaLista.addEventListener('click', () => {
       document.getElementById('form-nova-lista').reset();
+      const inputData = document.getElementById('nova-lista-data');
+      if (inputData) inputData.value = new Date().toISOString().split('T')[0];
       openSheet('sheet-nova-lista');
     });
   }
@@ -2523,15 +2592,19 @@ async function handleInitialRecovery(e) {
 
 let activeConcluirList = null;
 
-function openConcluirCompraModal() {
-  if (!state.activeListId) return;
-  const list = state.lists.find(l => l.id === state.activeListId);
+function openConcluirCompraModal(targetList = null) {
+  let list = null;
+  if (targetList && targetList.id) {
+    list = targetList;
+  } else if (state.activeListId) {
+    list = state.lists.find(l => String(l.id) === String(state.activeListId));
+  }
   if (!list) return;
 
   activeConcluirList = list;
   const { orcamento, totalGasto, saldoDisponivel } = calculateListTotals(list);
-  const now = new Date();
-  const dateStr = `Hoje, ${now.toLocaleDateString('pt-BR')}`;
+  const listDateFormatted = formatDateBR(list.date || list.createdAt);
+  const dateStr = listDateFormatted ? `📅 ${listDateFormatted}` : `Hoje, ${new Date().toLocaleDateString('pt-BR')}`;
 
   document.getElementById('concluir-lista-nome').textContent = list.name;
   document.getElementById('concluir-lista-categoria').textContent = `${getIcon(list.category)} ${list.category}`;
@@ -2559,17 +2632,31 @@ function openConcluirCompraModal() {
   openSheet('sheet-concluir-compra');
 }
 
+window.openConcluirCompraModalById = function(listId, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  const list = state.lists.find(l => String(l.id) === String(listId));
+  if (list) {
+    openConcluirCompraModal(list);
+  }
+};
+
 async function handleConfirmarFinalizarCompra() {
   if (!activeConcluirList) return;
   const list = activeConcluirList;
   const { orcamento, totalGasto, saldoDisponivel } = calculateListTotals(list);
   const btn = document.getElementById('btn-confirmar-gravar-historico');
-  const resetCheckboxes = document.getElementById('concluir-reset-checkboxes')?.checked ?? true;
+  const resetCheckboxes = document.getElementById('concluir-reset-checkboxes')?.checked ?? false;
 
   btn.disabled = true;
-  btn.textContent = 'Gravando no Histórico...';
+  btn.textContent = 'Gravando e Atualizando Saldo...';
 
   try {
+    const listDateStr = list.date || (list.createdAt ? list.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+    const purchaseDate = listDateStr ? new Date(listDateStr + 'T12:00:00') : new Date();
+
     const historyItem = {
       listId: list.id,
       listName: list.name,
@@ -2578,19 +2665,34 @@ async function handleConfirmarFinalizarCompra() {
       totalSpent: totalGasto,
       savings: saldoDisponivel,
       items: (list.items || []).map(i => ({ ...i })),
-      purchasedAt: new Date().toISOString()
+      purchasedAt: purchaseDate.toISOString()
     };
 
+    // 1. Grava no Histórico Oficial de Compras (isso registra a saída financeira)
     await db.savePurchaseHistory(historyItem);
     vibrateDevice(30);
 
+    // 2. Marca a Lista como Concluída
+    list.status = 'concluida';
+    list.concluidaAt = new Date().toISOString();
+    list.totalGastoFinal = totalGasto;
+
     if (resetCheckboxes && list.items && list.items.length > 0) {
       list.items.forEach(i => i.checked = false);
-      await db.saveList(list);
+    }
+    await db.saveList(list);
+
+    // 3. Atualiza imediatamente a Carteira (deduzindo a saída do saldo) e o Histórico
+    await loadAndRenderWallet();
+    await loadAndRenderHistory();
+    renderDashboard();
+
+    if (state.activeListId === list.id) {
+      renderListDetail(list.id);
     }
 
     closeSheet('sheet-concluir-compra');
-    alert(`🎉 Compra finalizada com sucesso!\nTotal Gasto: ${formatCurrency(totalGasto)}\nData: ${new Date().toLocaleDateString('pt-BR')}`);
+    alert(`🎉 Compra concluída com sucesso!\n\nTotal Gasto: ${formatCurrency(totalGasto)}\nData: ${formatDateBR(listDateStr)}\n\nO valor foi gravado no Histórico e deduzido do Saldo da Carteira!`);
 
     // Exibe anúncio Intersticial AdMob ao concluir a compra
     if (window.admobManager && typeof window.admobManager.showInterstitial === 'function') {
@@ -2604,7 +2706,7 @@ async function handleConfirmarFinalizarCompra() {
     alert('Erro ao gravar compra no histórico: ' + err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '💾 Gravar no Histórico & Balanço';
+    btn.textContent = '💾 Gravar no Histórico & Deduzir do Saldo';
   }
 }
 

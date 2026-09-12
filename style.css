@@ -2646,6 +2646,18 @@ input:focus, select:focus {
   color: #3730a3;
 }
 
+.badge-shared-tag.tag-concluida {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
 
+.badge-shared-tag.tag-data {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
 
-
+.card-lista-item.lista-concluida {
+  border-left: 4px solid #10b981;
+}

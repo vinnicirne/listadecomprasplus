@@ -458,5 +458,7 @@ begin
   end if;
 end $$;
 
-
-
+-- 13. Colunas adicionais na tabela 'listas' para data específica e status de conclusão
+alter table public.listas add column if not exists date text;
+alter table public.listas add column if not exists status text default 'aberta';
+alter table public.listas add column if not exists concluida_at timestamp with time zone;

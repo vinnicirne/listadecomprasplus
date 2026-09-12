@@ -13,3 +13,4 @@ desktop.ini
 
 # Logs e temporários
 *.log
+.env

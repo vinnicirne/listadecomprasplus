@@ -254,13 +254,15 @@
           <button id="btn-detalhe-compartilhar" class="btn btn-outline btn-sm" title="Compartilhar com outro usuário">
             👥 Compartilhar
           </button>
-          <button id="btn-abrir-finalizar-compra" class="btn btn-finish-sm" title="Finalizar compra e gravar no histórico">
+          <button id="btn-abrir-finalizar-compra" class="btn btn-finish-sm" title="Finalizar compra, gravar no histórico e deduzir do saldo">
             🏁 Concluir
           </button>
           <button id="btn-compartilhar-whatsapp" class="btn btn-whatsapp-sm" title="Compartilhar no WhatsApp">
             📲 WhatsApp
           </button>
           <span id="detalhe-categoria-tag" class="budget-tag">🛒 Supermercado</span>
+          <span id="detalhe-data-tag" class="budget-tag">📅 Hoje</span>
+          <span id="detalhe-status-badge" class="badge-shared-tag tag-concluida hidden">✅ Concluída</span>
         </div>
       </div>
 
@@ -858,6 +860,12 @@
           </div>
 
           <div class="form-group-mobile">
+            <label for="nova-lista-data">Data da Lista *</label>
+            <input type="date" id="nova-lista-data" required>
+            <small style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Data da lista ou compra planejada.</small>
+          </div>
+
+          <div class="form-group-mobile">
             <label for="nova-lista-categoria">Categoria da Lista *</label>
             <select id="nova-lista-categoria" required>
               <option value="Supermercado">🛒 Supermercado Geral</option>
@@ -926,7 +934,7 @@
           </div>
 
           <button type="button" id="btn-confirmar-gravar-historico" class="btn btn-finish-confirm" style="width: 100%;">
-            💾 Gravar no Histórico & Balanço
+            💾 Gravar no Histórico & Deduzir do Saldo
           </button>
         </div>
       </div>
